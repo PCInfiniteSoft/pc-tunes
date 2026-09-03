@@ -62,7 +62,7 @@ it is absent, the app is not running or every port in 8787-8791 is occupied.
 The following have been verified automatically on this machine and are confirmed
 working:
 
-- `swift run PCTunesTests` passes: `✅ 45 checks passed`, exit code 0.
+- `swift run PCTunesTests` passes: `✅ 52 checks passed`, exit code 0.
 - `./build.sh` produces a clean release build and an ad-hoc-signed `PC Tunes.app`
   bundle using `swift build` alone (no Xcode required — this machine only has the
   Command Line Tools, and `xcodebuild` is not available).
@@ -70,17 +70,21 @@ working:
   `sw.js` all pass `node --check` (no syntax errors).
 - The built app launches, binds a loopback listener (confirmed with `lsof`, e.g.
   `TCP localhost:8787 (LISTEN)`), and quits cleanly, releasing the port.
+- With the extension loaded, Chrome's service worker connects to the app — confirmed
+  with `lsof` showing an ESTABLISHED pair between Google Chrome and PCTunes on
+  `127.0.0.1:8787`.
 
-The following require a human at the keyboard — playing tracks, opening and closing
-Chrome windows, and rebooting are not things an automated agent can do — and have
-**not** been verified. Please work through this checklist and check off each item as
-it passes:
+The rest requires a human at the keyboard — playing tracks, opening and closing
+Chrome windows, and rebooting are not things an automated agent can do. The first
+three items below are confirmed working against the real YouTube Music PWA, which
+also confirms the transport selectors in `extension/inject.js` match the current
+DOM. The remainder are still open:
 
-- [ ] Open the YouTube Music PWA and play a track. Title and artist appear in the menu
+- [x] Open the YouTube Music PWA and play a track. Title and artist appear in the menu
       bar within 5s.
-- [ ] Click ⏯ in the dropdown. Playback toggles; the icon in the dropdown flips within
+- [x] Click ⏯ in the dropdown. Playback toggles; the icon in the dropdown flips within
       1s.
-- [ ] Click ⏭, then ⏮. The track changes and the menu bar text follows.
+- [x] Click ⏭, then ⏮. The track changes and the menu bar text follows.
 - [ ] Also open `https://music.youtube.com` in a regular Chrome tab and play something
       there. The menu bar still shows the PWA's track, and the transport buttons still
       control the PWA.
