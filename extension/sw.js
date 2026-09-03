@@ -15,6 +15,8 @@ let attempt = 0;
 let reconnectTimer = null;
 let keepaliveTimer = null;
 let helloTimer = null;
+/** The port a greeting arrived on. Worth retrying before scanning the range again. */
+let verifiedPort = null;
 
 /** tabId -> "app" | "tab". Lets us emit a `gone` message when a tab closes. */
 const knownTabs = new Map();
@@ -43,13 +45,37 @@ function sendToApp(object) {
   socket.send(JSON.stringify(object));
 }
 
+/// Drops every trace of a tab and tells the app, so its arbitration can move on.
+function forgetTab(tabId) {
+  const known = lastState.has(tabId) || knownTabs.has(tabId) || readyTabs.has(tabId);
+  lastState.delete(tabId);
+  knownTabs.delete(tabId);
+  readyTabs.delete(tabId);
+  if (known) {
+    sendToApp({ type: "gone", tabId });
+  }
+}
+
 function sendKeepalive() {
   if (lastState.size === 0) {
     sendToApp({ type: "ping" });
     return;
   }
-  for (const state of lastState.values()) {
-    sendToApp(state);
+  // A cached state is only worth re-sending while the page it came from still exists.
+  // A tab can die without ever firing onRemoved — navigation away, a Memory Saver
+  // discard, a renderer crash — so ask it before speaking for it.
+  for (const tabId of [...lastState.keys()]) {
+    chrome.tabs
+      .sendMessage(tabId, { kind: "alive" })
+      .then(() => {
+        const current = lastState.get(tabId);
+        if (!current) return;
+        // Re-send without `position`: the cached one is up to five seconds old, and a
+        // stale position interleaved with fresh ones would make it jump backwards.
+        const { position, ...rest } = current;
+        sendToApp(rest);
+      })
+      .catch(() => forgetTab(tabId));
   }
 }
 
@@ -57,7 +83,12 @@ function scheduleReconnect() {
   if (reconnectTimer) return;
   const delay = BACKOFF_MS[Math.min(attempt, BACKOFF_MS.length - 1)];
   attempt += 1;
-  portIndex = (portIndex + 1) % PORTS.length;
+  if (verifiedPort === null) {
+    portIndex = (portIndex + 1) % PORTS.length;
+  } else if (attempt >= 3) {
+    // Three failures on a port that used to answer: the app has probably moved.
+    verifiedPort = null;
+  }
   reconnectTimer = setTimeout(() => {
     reconnectTimer = null;
     connect();
@@ -75,7 +106,12 @@ function mostRecentReadyTab() {
 }
 
 function connect() {
-  if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+  if (
+    socket &&
+    (socket.readyState === WebSocket.OPEN ||
+      socket.readyState === WebSocket.CONNECTING ||
+      socket.readyState === WebSocket.CLOSING)
+  ) {
     return;
   }
   const port = PORTS[portIndex];
@@ -89,25 +125,29 @@ function connect() {
   socket = ws;
 
   ws.onopen = () => {
+    if (ws !== socket) return;
     // A socket that opens proves only that something is listening. Wait for the
     // app's greeting before treating this port as ours.
     clearTimeout(helloTimer);
     helloTimer = setTimeout(() => {
       console.warn(`[PC Tunes] no greeting on port ${port} — not our server`);
+      verifiedPort = null;
       ws.close();
     }, HELLO_TIMEOUT_MS);
   };
 
   ws.onmessage = async (event) => {
+    if (ws !== socket) return;
     let message;
     try {
       message = JSON.parse(event.data);
     } catch (error) {
       return;
     }
-    if (message && message.type === "hello") {
+    if (message && message.type === "hello" && message.app === "PC Tunes") {
       clearTimeout(helloTimer);
       attempt = 0;
+      verifiedPort = port;
       console.log(`[PC Tunes] connected on port ${port}`);
       clearInterval(keepaliveTimer);
       keepaliveTimer = setInterval(sendKeepalive, KEEPALIVE_MS);
@@ -142,6 +182,7 @@ function connect() {
   };
 
   ws.onclose = () => {
+    if (ws !== socket) return;
     clearInterval(keepaliveTimer);
     clearTimeout(helloTimer);
     socket = null;
@@ -189,11 +230,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
-  readyTabs.delete(tabId);
-  if (!knownTabs.has(tabId)) return;
-  knownTabs.delete(tabId);
-  lastState.delete(tabId);
-  sendToApp({ type: "gone", tabId });
+  forgetTab(tabId);
 });
 
 chrome.runtime.onStartup.addListener(connect);

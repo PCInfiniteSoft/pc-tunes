@@ -53,7 +53,9 @@ the Command Line Tools.
 
 **The menu bar shows `♪` with no text while music is playing.** Open the service worker
 console from `chrome://extensions` and look for `[PC Tunes] connected on port 8787`. If
-it is absent, the app is not running or every port in 8787-8791 is occupied.
+it is absent, the app is not running or every port in 8787-8791 is occupied. A
+`[PC Tunes] no greeting on port X — not our server` line means something else is
+listening on that port; the extension will keep scanning the rest of the range.
 
 **Next and previous stop working after a YouTube Music update.** The button selectors in
 `extension/inject.js` (`CONTROL_SELECTORS`) need updating against the current DOM.
@@ -93,11 +95,15 @@ DOM. The remainder are still open:
 - [ ] Close the regular tab too. The menu bar shows the bare `♪` icon and "Not
       playing"; transport buttons are disabled.
 - [ ] Click "Open YouTube Music" with nothing open. The PWA launches.
-- [ ] With music playing, quit and relaunch `PC Tunes.app`. State reappears within 5s
-      without touching Chrome.
+- [ ] With music playing, quit and relaunch `PC Tunes.app`. A relaunch onto the same
+      port reconnects within a few seconds without touching Chrome; a relaunch onto a
+      different port can take up to a full pass of the port range.
 - [ ] Enable "Launch at login", reboot. The icon returns after login. Then disable it
       again if unwanted.
 - [ ] Pause playback, leave YouTube Music in the background for six minutes, then check the menu bar still shows the track and the play button still works.
-- [ ] Occupy port 8787 with something else (`nc -l 127.0.0.1 8787`), restart both the app and the extension, and confirm the widget still connects.
+- [ ] Squat on port 8787 with a WebSocket server that completes the handshake and then
+      says nothing, restart the app so it takes 8788, and confirm the widget still
+      connects. The service worker console should log
+      `[PC Tunes] no greeting on port 8787 — not our server` and then connect on 8788.
 - [ ] With YouTube Music closed entirely, click ⏯ in the dropdown. The PWA opens and
       playback begins — the queued track if there is one, otherwise the first Quick Pick.

@@ -132,6 +132,11 @@ func runMenuBarTitleTests() {
     let trimmed = MenuBarTitle.format(title: over, artist: "")
     expectEqual(trimmed.count, 35, "an over-long title is trimmed to the limit")
     expect(trimmed.hasSuffix("…"), "an over-long title ends in an ellipsis")
+    expectEqual(
+        MenuBarTitle.format(title: "abc", artist: "", limit: 0),
+        "…",
+        "a zero limit degrades instead of trapping"
+    )
 }
 
 /// Polls `condition` until it holds or the timeout expires, recording one check.

@@ -11,9 +11,16 @@
     });
   });
 
-  chrome.runtime.onMessage.addListener((message) => {
-    if (!message || message.kind !== "cmd") return;
-    window.postMessage({ __pcTunes: true, dir: "in", action: message.action }, "*");
+  chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (!message) return;
+    if (message.kind === "alive") {
+      // Answering at all is the point — it proves this content script still exists.
+      sendResponse({ alive: true });
+      return;
+    }
+    if (message.kind === "cmd") {
+      window.postMessage({ __pcTunes: true, dir: "in", action: message.action }, "*");
+    }
   });
 
   // Announced separately from playback state: a page with an empty queue never emits
