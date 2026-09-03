@@ -6,11 +6,18 @@ enum YouTubeMusicLauncher {
     static let pwaPath = NSString(string: "~/Applications/Chrome Apps.localized/YouTube Music.app")
         .expandingTildeInPath
 
-    static func open() {
+    /// - Parameter activating: `true` brings the window forward, for the menu item that
+    ///   exists to show it. `false` launches it hidden, so playback can start from the
+    ///   widget without taking over the screen.
+    static func open(activating: Bool = true) {
+        let configuration = NSWorkspace.OpenConfiguration()
+        configuration.activates = activating
+        configuration.hides = !activating
+
         if FileManager.default.fileExists(atPath: pwaPath) {
             NSWorkspace.shared.openApplication(
                 at: URL(fileURLWithPath: pwaPath),
-                configuration: NSWorkspace.OpenConfiguration()
+                configuration: configuration
             )
             return
         }
@@ -20,7 +27,7 @@ enum YouTubeMusicLauncher {
         else { return }
         NSWorkspace.shared.open(
             [url], withApplicationAt: chrome,
-            configuration: NSWorkspace.OpenConfiguration()
+            configuration: configuration
         )
     }
 }

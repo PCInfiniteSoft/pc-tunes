@@ -75,7 +75,7 @@ final class PlayerModel: ObservableObject {
             // Nothing is connected. Ask the extension to start playback as soon as a
             // YouTube Music page appears, then open the PWA to make one appear.
             server.send(OutboundCommand(action: .startPlayback, tabId: Self.noTab))
-            YouTubeMusicLauncher.open()
+            YouTubeMusicLauncher.open(activating: false)
             return
         }
         server.send(OutboundCommand(action: .playPause, tabId: tabId))

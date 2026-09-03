@@ -2,7 +2,7 @@
 
 A macOS menu bar widget for YouTube Music. Shows the current track and provides
 play/pause, next and previous without leaving whatever app you are in. Pressing play
-with nothing open launches YouTube Music and starts playing.
+with nothing open launches YouTube Music hidden and starts playing.
 
 ## How it works
 
@@ -105,5 +105,6 @@ DOM. The remainder are still open:
       says nothing, restart the app so it takes 8788, and confirm the widget still
       connects. The service worker console should log
       `[PC Tunes] no greeting on port 8787 — not our server` and then connect on 8788.
-- [ ] With YouTube Music closed entirely, click ⏯ in the dropdown. The PWA opens and
-      playback begins — the queued track if there is one, otherwise the first Quick Pick.
+- [ ] With YouTube Music closed entirely, click ⏯ in the dropdown. Playback begins and
+      the PWA does *not* come to the front — its icon appears in the Dock with no window
+      shown. Then click "Open YouTube Music" and confirm the window does come forward.
