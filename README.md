@@ -65,7 +65,7 @@ listening on that port; the extension will keep scanning the rest of the range.
 The following have been verified automatically on this machine and are confirmed
 working:
 
-- `swift run PCTunesTests` passes: `✅ 52 checks passed`, exit code 0.
+- `swift run PCTunesTests` passes: `✅ 55 checks passed`, exit code 0.
 - `./build.sh` produces a clean release build and an ad-hoc-signed `PC Tunes.app`
   bundle using `swift build` alone (no Xcode required — this machine only has the
   Command Line Tools, and `xcodebuild` is not available).
