@@ -85,28 +85,47 @@
     runCommand(data.action);
   });
 
-  function attach() {
+  let boundVideo = null;
+  let boundBar = null;
+  let barObserver = null;
+
+  function onPlaybackEvent() {
+    push(true);
+  }
+
+  /// YouTube Music replaces the video element and can remount the player bar during
+  /// SPA navigation, so listeners have to follow whatever is currently on the page
+  /// rather than whatever was there at load.
+  function bindIfChanged() {
     const video = videoEl();
-    if (!video) {
-      setTimeout(attach, 500);
-      return;
+    if (video && video !== boundVideo) {
+      if (boundVideo) {
+        boundVideo.removeEventListener("play", onPlaybackEvent);
+        boundVideo.removeEventListener("pause", onPlaybackEvent);
+        boundVideo.removeEventListener("loadedmetadata", onPlaybackEvent);
+      }
+      video.addEventListener("play", onPlaybackEvent);
+      video.addEventListener("pause", onPlaybackEvent);
+      video.addEventListener("loadedmetadata", onPlaybackEvent);
+      boundVideo = video;
+      push(true);
     }
-    video.addEventListener("play", () => push(true));
-    video.addEventListener("pause", () => push(true));
-    video.addEventListener("loadedmetadata", () => push(true));
 
     const bar = playerBar();
-    if (bar) {
-      new MutationObserver(schedulePush).observe(bar, {
+    if (bar && bar !== boundBar) {
+      if (barObserver) barObserver.disconnect();
+      barObserver = new MutationObserver(schedulePush);
+      barObserver.observe(bar, {
         subtree: true,
         childList: true,
         characterData: true,
       });
+      boundBar = bar;
     }
-
-    setInterval(() => push(true), HEARTBEAT_MS);
-    push(true);
   }
 
-  attach();
+  setInterval(bindIfChanged, 1000);
+  setInterval(() => push(true), HEARTBEAT_MS);
+  bindIfChanged();
+  push(true);
 })();
