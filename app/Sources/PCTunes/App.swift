@@ -8,10 +8,16 @@ struct PCTunesApp: App {
         MenuBarExtra {
             MenuContent(model: model)
         } label: {
-            if let title = model.menuBarTitle {
-                Label(title, systemImage: "music.note")
+            if let icon = MenuBarIcon.image {
+                if let title = model.menuBarTitle {
+                    Label { Text(title) } icon: { Image(nsImage: icon) }
+                } else {
+                    Image(nsImage: icon)
+                }
+            } else if let title = model.menuBarTitle {
+                Label(title, systemImage: "play.circle.fill")
             } else {
-                Image(systemName: "music.note")
+                Image(systemName: "play.circle.fill")
             }
         }
         .menuBarExtraStyle(.window)
