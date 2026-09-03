@@ -1,4 +1,5 @@
 import Foundation
+import Network
 import PCTunesCore
 
 func runMessageTests() {
@@ -95,8 +96,89 @@ func runArbiterTests() {
     expectEqual(stale.active?.tabId, 9, "source within the timeout survives")
     stale.dropStale(olderThan: (t0 + 16).addingTimeInterval(-staleAfter))
     expectNil(stale.active, "source past the timeout is dropped")
+
+    // Only the stale source is swept, not every source.
+    var mixed = SourceArbiter()
+    mixed.apply(.state(tabId: 20, source: .tab, track: track("old")), at: t0)
+    mixed.apply(.state(tabId: 21, source: .tab, track: track("fresh")), at: t0 + 20)
+    mixed.dropStale(olderThan: (t0 + 20).addingTimeInterval(-staleAfter))
+    expectEqual(mixed.active?.tabId, 21, "fresh source survives the sweep")
+    mixed.apply(.gone(tabId: 21), at: t0 + 21)
+    expectNil(mixed.active, "the stale source was removed, not merely outranked")
+}
+
+func runServerTests() {
+    let server = WSServer(portRange: 8787...8791)
+    let received = DispatchSemaphore(value: 0)
+    let commandReceived = DispatchSemaphore(value: 0)
+    var got: InboundMessage?
+
+    do {
+        try server.start { message in
+            got = message
+            received.signal()
+        }
+    } catch {
+        failures.append("FAIL server start — threw \(error)")
+        checkCount += 1
+        return
+    }
+
+    guard let port = server.boundPort else {
+        failures.append("FAIL server start — no bound port")
+        checkCount += 1
+        return
+    }
+    expect((8787...8791).contains(port), "bound port is inside the allowed range")
+
+    let client = NWConnection(
+        to: .url(URL(string: "ws://127.0.0.1:\(port)/")!),
+        using: WSServer.clientParameters()
+    )
+    var commandJSON = ""
+
+    func receiveOnClient() {
+        client.receiveMessage { data, _, _, _ in
+            if let data, let text = String(data: data, encoding: .utf8) {
+                commandJSON = text
+                commandReceived.signal()
+            }
+        }
+    }
+
+    client.stateUpdateHandler = { state in
+        guard case .ready = state else { return }
+        let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
+        let context = NWConnection.ContentContext(identifier: "send", metadata: [metadata])
+        let payload = #"{"type":"state","tabId":5,"source":"app","title":"Hi","playing":true}"#
+        client.send(
+            content: Data(payload.utf8), contentContext: context,
+            isComplete: true, completion: .contentProcessed { _ in }
+        )
+        receiveOnClient()
+    }
+    client.start(queue: .global())
+
+    expectEqual(received.wait(timeout: .now() + 5), .success, "server received a message")
+    if case .state(let tabId, let source, let track)? = got {
+        expectEqual(tabId, 5, "received tabId")
+        expectEqual(source, .app, "received source")
+        expectEqual(track.title, "Hi", "received title")
+    } else {
+        failures.append("FAIL server receive — expected a .state message, got \(String(describing: got))")
+        checkCount += 1
+    }
+
+    server.send(OutboundCommand(action: .next, tabId: 5))
+    expectEqual(commandReceived.wait(timeout: .now() + 5), .success, "client received a command")
+    expect(commandJSON.contains("\"action\":\"next\""), "command carries the action")
+    expect(commandJSON.contains("\"tabId\":5"), "command carries the tabId")
+
+    client.cancel()
+    server.stop()
 }
 
 runMessageTests()
 runArbiterTests()
+runServerTests()
 finish()
