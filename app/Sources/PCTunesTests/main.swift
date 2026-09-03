@@ -89,9 +89,11 @@ func runArbiterTests() {
     // A source that stops sending heartbeats is dropped.
     var stale = SourceArbiter()
     stale.apply(.state(tabId: 9, source: .app, track: track("x")), at: t0)
-    stale.dropStale(olderThan: t0 + 14)
+    // The caller owns the timeout and passes an absolute cutoff.
+    let staleAfter: TimeInterval = 15
+    stale.dropStale(olderThan: (t0 + 14).addingTimeInterval(-staleAfter))
     expectEqual(stale.active?.tabId, 9, "source within the timeout survives")
-    stale.dropStale(olderThan: t0 + 16)
+    stale.dropStale(olderThan: (t0 + 16).addingTimeInterval(-staleAfter))
     expectNil(stale.active, "source past the timeout is dropped")
 }
 

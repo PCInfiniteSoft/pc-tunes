@@ -27,7 +27,7 @@ public struct SourceArbiter: Sendable {
 
     /// Removes every source whose last update is at or before `cutoff`.
     public mutating func dropStale(olderThan cutoff: Date) {
-        entries = entries.filter { $0.value.updatedAt > cutoff.addingTimeInterval(-15) }
+        entries = entries.filter { $0.value.updatedAt > cutoff }
     }
 
     public var active: (tabId: Int, track: TrackState)? {
