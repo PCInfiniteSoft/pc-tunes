@@ -64,7 +64,10 @@ final class PlayerModel: ObservableObject {
                 + "Another app may be using them — quit it and restart PC Tunes."
         }
         staleTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
-            Task { @MainActor in self?.expireStaleSources() }
+            Task { @MainActor in
+                self?.expireStaleSources()
+                self?.refreshLoginItemState()
+            }
         }
     }
 
@@ -95,6 +98,19 @@ final class PlayerModel: ObservableObject {
     private func expireStaleSources() {
         arbiter.dropStale(olderThan: Date().addingTimeInterval(-Self.staleAfter))
         publishActive()
+    }
+
+    /// The user can approve or revoke the login item in System Settings at any time,
+    /// and `SMAppService` has no change notification, so re-read it on the same tick
+    /// that sweeps stale sources.
+    private func refreshLoginItemState() {
+        let actual = LoginItem.isEnabled
+        if actual != launchAtLogin {
+            isReconcilingLoginItem = true
+            launchAtLogin = actual
+            isReconcilingLoginItem = false
+        }
+        loginItemNeedsApproval = LoginItem.needsApproval
     }
 
     private func publishActive() {
