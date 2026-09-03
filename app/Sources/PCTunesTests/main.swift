@@ -178,7 +178,120 @@ func runServerTests() {
     server.stop()
 }
 
+func runServerResilienceTests() {
+    // Defect 1: a second server must fall through to the next free port.
+    let first = WSServer(portRange: 8787...8791)
+    do {
+        try first.start { _ in }
+    } catch {
+        failures.append("FAIL port fallback — first server did not start: \(error)")
+        checkCount += 1
+        return
+    }
+    let second = WSServer(portRange: 8787...8791)
+    do {
+        try second.start { _ in }
+    } catch {
+        failures.append("FAIL port fallback — second server did not start: \(error)")
+        checkCount += 1
+        first.stop()
+        return
+    }
+    expect(
+        first.boundPort != second.boundPort,
+        "a second server binds a different port than the first"
+    )
+    first.stop()
+    second.stop()
+
+    // Defect 3 / keepalive: an unknown message type is dropped without closing
+    // the connection, so a valid message sent afterwards still arrives.
+    let server = WSServer(portRange: 8787...8791)
+    let arrived = DispatchSemaphore(value: 0)
+    var afterPing: InboundMessage?
+    do {
+        try server.start { message in
+            afterPing = message
+            arrived.signal()
+        }
+    } catch {
+        failures.append("FAIL ping tolerance — server did not start: \(error)")
+        checkCount += 1
+        return
+    }
+    guard let port = server.boundPort else {
+        failures.append("FAIL ping tolerance — no bound port")
+        checkCount += 1
+        return
+    }
+
+    let client = NWConnection(
+        to: .url(URL(string: "ws://127.0.0.1:\(port)/")!),
+        using: WSServer.clientParameters()
+    )
+    func send(_ text: String) {
+        let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
+        let context = NWConnection.ContentContext(identifier: "send", metadata: [metadata])
+        client.send(
+            content: Data(text.utf8), contentContext: context,
+            isComplete: true, completion: .contentProcessed { _ in }
+        )
+    }
+    client.stateUpdateHandler = { state in
+        guard case .ready = state else { return }
+        send(#"{"type":"ping"}"#)
+        send(#"{"type":"state","tabId":77,"source":"tab","title":"After ping"}"#)
+    }
+    client.start(queue: .global())
+
+    expectEqual(arrived.wait(timeout: .now() + 5), .success, "a ping does not close the connection")
+    if case .state(let tabId, _, _)? = afterPing {
+        expectEqual(tabId, 77, "the message after the ping arrives intact")
+    } else {
+        failures.append("FAIL ping tolerance — expected a .state message after the ping")
+        checkCount += 1
+    }
+    client.cancel()
+    server.stop()
+
+    // Defect 2: stopping from inside the message handler must not deadlock.
+    let reentrant = WSServer(portRange: 8787...8791)
+    let stopped = DispatchSemaphore(value: 0)
+    do {
+        try reentrant.start { _ in
+            reentrant.stop()
+            stopped.signal()
+        }
+    } catch {
+        failures.append("FAIL reentrant stop — server did not start: \(error)")
+        checkCount += 1
+        return
+    }
+    guard let reentrantPort = reentrant.boundPort else {
+        failures.append("FAIL reentrant stop — no bound port")
+        checkCount += 1
+        return
+    }
+    let poker = NWConnection(
+        to: .url(URL(string: "ws://127.0.0.1:\(reentrantPort)/")!),
+        using: WSServer.clientParameters()
+    )
+    poker.stateUpdateHandler = { state in
+        guard case .ready = state else { return }
+        let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
+        let context = NWConnection.ContentContext(identifier: "send", metadata: [metadata])
+        poker.send(
+            content: Data(#"{"type":"gone","tabId":1}"#.utf8), contentContext: context,
+            isComplete: true, completion: .contentProcessed { _ in }
+        )
+    }
+    poker.start(queue: .global())
+    expectEqual(stopped.wait(timeout: .now() + 5), .success, "stop() from a message handler returns")
+    poker.cancel()
+}
+
 runMessageTests()
 runArbiterTests()
 runServerTests()
+runServerResilienceTests()
 finish()

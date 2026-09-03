@@ -45,10 +45,32 @@ public final class WSServer {
             )
             guard let listener = try? NWListener(using: parameters) else { continue }
 
+            // NWListener binds asynchronously: a port conflict only shows up as a
+            // `.failed` state after `start`, so wait for the outcome before deciding
+            // whether this port is really ours.
+            let settled = DispatchSemaphore(value: 0)
+            var didBind = false
+            listener.stateUpdateHandler = { state in
+                switch state {
+                case .ready:
+                    didBind = true
+                    settled.signal()
+                case .failed, .cancelled:
+                    settled.signal()
+                default:
+                    break
+                }
+            }
             listener.newConnectionHandler = { [weak self] connection in
                 self?.accept(connection)
             }
             listener.start(queue: queue)
+
+            guard settled.wait(timeout: .now() + 2) == .success, didBind else {
+                listener.cancel()
+                continue
+            }
+            listener.stateUpdateHandler = nil
 
             self.listener = listener
             self.boundPort = port
@@ -74,13 +96,14 @@ public final class WSServer {
     }
 
     public func stop() {
-        queue.sync {
-            for connection in connections.values { connection.cancel() }
-            connections.removeAll()
-        }
         listener?.cancel()
         listener = nil
         boundPort = nil
+        queue.async { [weak self] in
+            guard let self else { return }
+            for connection in self.connections.values { connection.cancel() }
+            self.connections.removeAll()
+        }
     }
 
     private func accept(_ connection: NWConnection) {
@@ -100,15 +123,29 @@ public final class WSServer {
     }
 
     private func receive(on connection: NWConnection) {
-        connection.receiveMessage { [weak self] data, _, _, error in
+        connection.receiveMessage { [weak self] data, context, isComplete, error in
             guard let self else { return }
-            if let data, let message = try? MessageDecoder.decode(data) {
-                self.onMessage?(message)
-            }
-            // Anything that fails to decode — including unknown message types — is dropped.
-            guard error == nil else {
+
+            let websocket = context?.protocolMetadata(definition: NWProtocolWebSocket.definition)
+                as? NWProtocolWebSocket.Metadata
+            if websocket?.opcode == .close {
                 connection.cancel()
                 return
+            }
+            if error != nil {
+                connection.cancel()
+                return
+            }
+            // A completed receive carrying no payload is the peer's EOF.
+            if data == nil && isComplete {
+                connection.cancel()
+                return
+            }
+
+            // Anything that fails to decode — including the extension's `ping`
+            // keepalive — is dropped without disturbing the connection.
+            if let data, let message = try? MessageDecoder.decode(data) {
+                self.onMessage?(message)
             }
             self.receive(on: connection)
         }
