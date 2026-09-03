@@ -22,10 +22,12 @@ struct MenuContent: View {
                         Text(track.title)
                             .font(.headline)
                             .lineLimit(2)
-                        Text(track.artist)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                        if !track.artist.isEmpty {
+                            Text(track.artist)
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                         if !track.album.isEmpty {
                             Text(track.album)
                                 .font(.caption)

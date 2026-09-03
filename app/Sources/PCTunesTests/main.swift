@@ -107,6 +107,28 @@ func runArbiterTests() {
     expectNil(mixed.active, "the stale source was removed, not merely outranked")
 }
 
+func runMenuBarTitleTests() {
+    expectEqual(
+        MenuBarTitle.format(title: "Short", artist: "Band"),
+        "Short — Band",
+        "a short title is untouched"
+    )
+    expectEqual(
+        MenuBarTitle.format(title: "Solo", artist: ""),
+        "Solo",
+        "an empty artist drops the separator"
+    )
+    // Exactly at the limit: 35 characters, no ellipsis.
+    let exact = String(repeating: "a", count: 35)
+    expectEqual(MenuBarTitle.format(title: exact, artist: ""), exact, "a title at the limit is kept whole")
+    expectEqual(MenuBarTitle.format(title: exact, artist: "").count, 35, "a title at the limit stays 35 characters")
+    // One over: trimmed to 34 characters plus the ellipsis, still 35 total.
+    let over = String(repeating: "b", count: 36)
+    let trimmed = MenuBarTitle.format(title: over, artist: "")
+    expectEqual(trimmed.count, 35, "an over-long title is trimmed to the limit")
+    expect(trimmed.hasSuffix("…"), "an over-long title ends in an ellipsis")
+}
+
 /// Polls `condition` until it holds or the timeout expires, recording one check.
 func expectEventually(
     _ label: String, timeout: TimeInterval = 5, _ condition: () -> Bool
@@ -151,6 +173,8 @@ func runServerTests() {
         using: WSServer.clientParameters()
     )
     var commandJSON = ""
+    let helloReceived = DispatchSemaphore(value: 0)
+    var helloJSON = ""
 
     func receiveOnClient() {
         client.receiveMessage { data, _, _, _ in
@@ -161,8 +185,22 @@ func runServerTests() {
         }
     }
 
+    // The server greets every peer right after accepting it, before it has even
+    // seen this client's own message — so the first frame this client receives
+    // must be that greeting, not whatever the app sends later.
+    func receiveHello() {
+        client.receiveMessage { data, _, _, _ in
+            if let data, let text = String(data: data, encoding: .utf8) {
+                helloJSON = text
+                helloReceived.signal()
+            }
+            receiveOnClient()
+        }
+    }
+
     client.stateUpdateHandler = { state in
         guard case .ready = state else { return }
+        receiveHello()
         let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
         let context = NWConnection.ContentContext(identifier: "send", metadata: [metadata])
         let payload = #"{"type":"state","tabId":5,"source":"app","title":"Hi","playing":true}"#
@@ -170,9 +208,12 @@ func runServerTests() {
             content: Data(payload.utf8), contentContext: context,
             isComplete: true, completion: .contentProcessed { _ in }
         )
-        receiveOnClient()
     }
     client.start(queue: .global())
+
+    let gotHello = helloReceived.wait(timeout: .now() + 5) == .success
+        && helloJSON.contains("\"type\":\"hello\"")
+    expect(gotHello, "the first frame from the server is the greeting")
 
     expectEqual(received.wait(timeout: .now() + 5), .success, "server received a message")
     if case .state(let tabId, let source, let track)? = got {
@@ -331,6 +372,7 @@ func runServerResilienceTests() {
 
 runMessageTests()
 runArbiterTests()
+runMenuBarTitleTests()
 runServerTests()
 runServerResilienceTests()
 finish()

@@ -3,7 +3,6 @@
   "name": "PC Tunes Bridge",
   "version": "1.0.0",
   "description": "Bridges YouTube Music playback state to the PC Tunes menu bar app.",
-  "permissions": ["tabs"],
   "background": {
     "service_worker": "sw.js"
   },

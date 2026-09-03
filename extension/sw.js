@@ -2,16 +2,24 @@
 
 const PORTS = [8787, 8788, 8789, 8790, 8791];
 const BACKOFF_MS = [1000, 2000, 4000, 8000, 30000];
-const KEEPALIVE_MS = 20000;
+// Short enough to stay inside the app's 15s stale timeout. Chrome throttles a
+// backgrounded page's timers to once a minute, so the page's own heartbeat cannot
+// be relied on — the worker's can.
+const KEEPALIVE_MS = 5000;
+const HELLO_TIMEOUT_MS = 2000;
 
 let socket = null;
 let portIndex = 0;
 let attempt = 0;
 let reconnectTimer = null;
 let keepaliveTimer = null;
+let helloTimer = null;
 
 /** tabId -> "app" | "tab". Lets us emit a `gone` message when a tab closes. */
 const knownTabs = new Map();
+
+/** tabId -> the last state message sent, re-sent on the keepalive tick. */
+const lastState = new Map();
 
 async function windowKindFor(tabId) {
   try {
@@ -19,6 +27,8 @@ async function windowKindFor(tabId) {
     const win = await chrome.windows.get(tab.windowId);
     return win.type === "app" ? "app" : "tab";
   } catch (error) {
+    console.warn(`[PC Tunes] could not resolve the window for tab ${tabId}, ` +
+      `treating it as an ordinary tab:`, error);
     return "tab";
   }
 }
@@ -26,6 +36,16 @@ async function windowKindFor(tabId) {
 function sendToApp(object) {
   if (!socket || socket.readyState !== WebSocket.OPEN) return;
   socket.send(JSON.stringify(object));
+}
+
+function sendKeepalive() {
+  if (lastState.size === 0) {
+    sendToApp({ type: "ping" });
+    return;
+  }
+  for (const state of lastState.values()) {
+    sendToApp(state);
+  }
 }
 
 function scheduleReconnect() {
@@ -54,11 +74,13 @@ function connect() {
   socket = ws;
 
   ws.onopen = () => {
-    attempt = 0;
-    console.log(`[PC Tunes] connected on port ${port}`);
-    clearInterval(keepaliveTimer);
-    // WebSocket traffic resets the service worker idle timer on Chrome 116+.
-    keepaliveTimer = setInterval(() => sendToApp({ type: "ping" }), KEEPALIVE_MS);
+    // A socket that opens proves only that something is listening. Wait for the
+    // app's greeting before treating this port as ours.
+    clearTimeout(helloTimer);
+    helloTimer = setTimeout(() => {
+      console.warn(`[PC Tunes] no greeting on port ${port} — not our server`);
+      ws.close();
+    }, HELLO_TIMEOUT_MS);
   };
 
   ws.onmessage = async (event) => {
@@ -66,6 +88,14 @@ function connect() {
     try {
       message = JSON.parse(event.data);
     } catch (error) {
+      return;
+    }
+    if (message && message.type === "hello") {
+      clearTimeout(helloTimer);
+      attempt = 0;
+      console.log(`[PC Tunes] connected on port ${port}`);
+      clearInterval(keepaliveTimer);
+      keepaliveTimer = setInterval(sendKeepalive, KEEPALIVE_MS);
       return;
     }
     if (!message || message.type !== "cmd" || typeof message.tabId !== "number") return;
@@ -88,6 +118,7 @@ function connect() {
 
   ws.onclose = () => {
     clearInterval(keepaliveTimer);
+    clearTimeout(helloTimer);
     socket = null;
     scheduleReconnect();
   };
@@ -106,19 +137,24 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   // from one tab must not overtake each other on the way to the app.
   const known = knownTabs.get(tabId);
   if (known) {
-    sendToApp({ type: "state", tabId, source: known, ...message.payload });
+    const state = { type: "state", tabId, source: known, ...message.payload };
+    lastState.set(tabId, state);
+    sendToApp(state);
     return;
   }
 
   windowKindFor(tabId).then((source) => {
     knownTabs.set(tabId, source);
-    sendToApp({ type: "state", tabId, source, ...message.payload });
+    const state = { type: "state", tabId, source, ...message.payload };
+    lastState.set(tabId, state);
+    sendToApp(state);
   });
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
   if (!knownTabs.has(tabId)) return;
   knownTabs.delete(tabId);
+  lastState.delete(tabId);
   sendToApp({ type: "gone", tabId });
 });
 

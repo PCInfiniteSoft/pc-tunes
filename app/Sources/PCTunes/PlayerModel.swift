@@ -7,7 +7,6 @@ import SwiftUI
 final class PlayerModel: ObservableObject {
     /// A source is considered gone this many seconds after its last heartbeat.
     private static let staleAfter: TimeInterval = 15
-    private static let maxMenuBarTitleLength = 35
 
     @Published private(set) var track: TrackState?
     @Published private(set) var activeTabId: Int?
@@ -42,9 +41,7 @@ final class PlayerModel: ObservableObject {
     /// `nil` renders the icon on its own, with no text beside it.
     var menuBarTitle: String? {
         guard let track else { return nil }
-        let full = track.artist.isEmpty ? track.title : "\(track.title) — \(track.artist)"
-        guard full.count > Self.maxMenuBarTitleLength else { return full }
-        return String(full.prefix(Self.maxMenuBarTitleLength - 1)) + "…"
+        return MenuBarTitle.format(title: track.title, artist: track.artist)
     }
 
     /// The server must be listening from launch, not from the first time the dropdown

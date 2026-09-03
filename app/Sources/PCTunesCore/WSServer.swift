@@ -14,6 +14,8 @@ public final class WSServer {
     private var connections: [ObjectIdentifier: NWConnection] = [:]
     private var onMessage: MessageHandler?
 
+    private static let helloFrame = Data(#"{"type":"hello","app":"PC Tunes"}"#.utf8)
+
     public private(set) var boundPort: UInt16?
 
     /// Number of live peer connections. Reads on the server's own queue, so it is
@@ -79,7 +81,11 @@ public final class WSServer {
                 listener.cancel()
                 continue
             }
-            listener.stateUpdateHandler = nil
+            listener.stateUpdateHandler = { state in
+                if case .failed(let error) = state {
+                    NSLog("[PC Tunes] listener on port \(port) failed: \(error)")
+                }
+            }
 
             self.listener = listener
             self.boundPort = port
@@ -91,17 +97,21 @@ public final class WSServer {
     public func send(_ command: OutboundCommand) {
         let data = command.encoded()
         guard !data.isEmpty else { return }
-        let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
-        let context = NWConnection.ContentContext(identifier: "command", metadata: [metadata])
         queue.async { [weak self] in
             guard let self else { return }
             for connection in self.connections.values {
-                connection.send(
-                    content: data, contentContext: context,
-                    isComplete: true, completion: .contentProcessed { _ in }
-                )
+                self.send(data, on: connection)
             }
         }
+    }
+
+    private func send(_ data: Data, on connection: NWConnection) {
+        let metadata = NWProtocolWebSocket.Metadata(opcode: .text)
+        let context = NWConnection.ContentContext(identifier: "frame", metadata: [metadata])
+        connection.send(
+            content: data, contentContext: context,
+            isComplete: true, completion: .contentProcessed { _ in }
+        )
     }
 
     // Deliberately async: `stop()` is reachable from a message handler, which already
@@ -130,6 +140,9 @@ public final class WSServer {
             }
         }
         connection.start(queue: queue)
+        // Identify ourselves so the extension can tell PC Tunes apart from an
+        // unrelated process squatting on the same port.
+        send(Self.helloFrame, on: connection)
         receive(on: connection)
     }
 

@@ -92,3 +92,5 @@ it passes:
       without touching Chrome.
 - [ ] Enable "Launch at login", reboot. The icon returns after login. Then disable it
       again if unwanted.
+- [ ] Pause playback, leave YouTube Music in the background for six minutes, then check the menu bar still shows the track and the play button still works.
+- [ ] Occupy port 8787 with something else (`nc -l 127.0.0.1 8787`), restart both the app and the extension, and confirm the widget still connects.
