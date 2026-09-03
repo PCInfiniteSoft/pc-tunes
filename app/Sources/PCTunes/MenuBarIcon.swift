@@ -1,26 +1,41 @@
 import AppKit
 
-/// The menu bar's icon.
+/// The menu bar's icon: a ringed play triangle, drawn rather than bundled.
 ///
-/// Read from the installed YouTube Music PWA at runtime rather than bundled, so this
-/// repository never ships a copy of Google's artwork and the icon always matches what
-/// the user actually has installed.
+/// It is a template image, so macOS tints it to match the menu bar in both light and
+/// dark appearance and it sits consistently beside the system's own icons.
 enum MenuBarIcon {
-    /// Menu bar art is measured in points and the bar is 22pt tall; 18 leaves the
-    /// padding the system expects.
+    /// The menu bar is 22pt tall; 18 leaves the padding the system expects.
     private static let side: CGFloat = 18
 
-    static let image: NSImage? = {
-        let path = YouTubeMusicLauncher.pwaPath
-        guard FileManager.default.fileExists(atPath: path) else { return nil }
+    static let image: NSImage = {
+        let image = NSImage(
+            size: NSSize(width: side, height: side),
+            flipped: false
+        ) { rect in
+            let lineWidth: CGFloat = 1.4
+            let inset = lineWidth / 2 + 0.6
 
-        let source = NSWorkspace.shared.icon(forFile: path)
-        let resized = NSImage(size: NSSize(width: side, height: side), flipped: false) { rect in
-            source.draw(in: rect)
+            let ring = NSBezierPath(ovalIn: rect.insetBy(dx: inset, dy: inset))
+            ring.lineWidth = lineWidth
+            NSColor.black.setStroke()
+            ring.stroke()
+
+            let centre = CGPoint(x: rect.midX, y: rect.midY)
+            let reach = rect.width * 0.20
+            let triangle = NSBezierPath()
+            triangle.move(to: CGPoint(x: centre.x + reach * 1.15, y: centre.y))
+            triangle.line(to: CGPoint(x: centre.x - reach * 0.75, y: centre.y + reach))
+            triangle.line(to: CGPoint(x: centre.x - reach * 0.75, y: centre.y - reach))
+            triangle.close()
+            NSColor.black.setFill()
+            triangle.fill()
+
             return true
         }
-        // The PWA icon is full colour, so it must not be treated as a template mask.
-        resized.isTemplate = false
-        return resized
+        // Alpha is used as a mask when this is set, so the black above becomes whatever
+        // colour the menu bar needs.
+        image.isTemplate = true
+        return image
     }()
 }
