@@ -11,16 +11,31 @@ final class PlayerModel: ObservableObject {
 
     @Published private(set) var track: TrackState?
     @Published private(set) var activeTabId: Int?
+    /// Non-nil when the widget cannot function at all. The dropdown surfaces this
+    /// instead of the usual "Not playing" state.
+    @Published private(set) var startupFailure: String?
+    /// Bound to the dropdown's toggle. Reconciles itself against what `SMAppService`
+    /// actually reports, so a failed registration cannot leave the toggle lying.
     @Published var launchAtLogin: Bool = LoginItem.isEnabled {
         didSet {
-            guard launchAtLogin != oldValue else { return }
-            LoginItem.set(launchAtLogin)
+            guard !isReconcilingLoginItem, launchAtLogin != oldValue else { return }
+            let actual = LoginItem.set(launchAtLogin)
+            loginItemNeedsApproval = LoginItem.needsApproval
+            guard actual != launchAtLogin else { return }
+            isReconcilingLoginItem = true
+            launchAtLogin = actual
+            isReconcilingLoginItem = false
         }
     }
+
+    /// True when the login item is registered but macOS is still waiting for the user
+    /// to approve it in System Settings.
+    @Published private(set) var loginItemNeedsApproval: Bool = LoginItem.needsApproval
 
     private var arbiter = SourceArbiter()
     private let server = WSServer()
     private var staleTimer: Timer?
+    private var isReconcilingLoginItem = false
 
     var isConnected: Bool { track != nil }
 
@@ -45,6 +60,8 @@ final class PlayerModel: ObservableObject {
             }
         } catch {
             NSLog("[PC Tunes] could not bind a port in 8787-8791: \(error)")
+            startupFailure = "Could not open a local port in the range 8787-8791. "
+                + "Another app may be using them — quit it and restart PC Tunes."
         }
         staleTimer = Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in
             Task { @MainActor in self?.expireStaleSources() }
