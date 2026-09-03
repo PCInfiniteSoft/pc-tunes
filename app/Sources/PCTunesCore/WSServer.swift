@@ -16,6 +16,12 @@ public final class WSServer {
 
     public private(set) var boundPort: UInt16?
 
+    /// Number of live peer connections. Reads on the server's own queue, so it is
+    /// safe to call from anywhere.
+    public var connectionCount: Int {
+        queue.sync { connections.count }
+    }
+
     public init(portRange: ClosedRange<UInt16> = 8787...8791) {
         self.portRange = portRange
     }
@@ -48,6 +54,9 @@ public final class WSServer {
             // NWListener binds asynchronously: a port conflict only shows up as a
             // `.failed` state after `start`, so wait for the outcome before deciding
             // whether this port is really ours.
+            // A loopback bind settles in milliseconds. The timeout is a safety net,
+            // kept short because the app starts the server from its main actor:
+            // the whole port range costs at most 2.5s in the worst case.
             let settled = DispatchSemaphore(value: 0)
             var didBind = false
             listener.stateUpdateHandler = { state in
@@ -66,7 +75,7 @@ public final class WSServer {
             }
             listener.start(queue: queue)
 
-            guard settled.wait(timeout: .now() + 2) == .success, didBind else {
+            guard settled.wait(timeout: .now() + 0.5) == .success, didBind else {
                 listener.cancel()
                 continue
             }
@@ -95,6 +104,8 @@ public final class WSServer {
         }
     }
 
+    // Deliberately async: `stop()` is reachable from a message handler, which already
+    // owns `queue`, and a `sync` hop there aborts the process.
     public func stop() {
         listener?.cancel()
         listener = nil

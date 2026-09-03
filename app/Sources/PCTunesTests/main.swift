@@ -107,6 +107,21 @@ func runArbiterTests() {
     expectNil(mixed.active, "the stale source was removed, not merely outranked")
 }
 
+/// Polls `condition` until it holds or the timeout expires, recording one check.
+func expectEventually(
+    _ label: String, timeout: TimeInterval = 5, _ condition: () -> Bool
+) {
+    let deadline = Date().addingTimeInterval(timeout)
+    while Date() < deadline {
+        if condition() {
+            expect(true, label)
+            return
+        }
+        usleep(50_000)
+    }
+    expect(false, label)
+}
+
 func runServerTests() {
     let server = WSServer(portRange: 8787...8791)
     let received = DispatchSemaphore(value: 0)
@@ -288,6 +303,30 @@ func runServerResilienceTests() {
     poker.start(queue: .global())
     expectEqual(stopped.wait(timeout: .now() + 5), .success, "stop() from a message handler returns")
     poker.cancel()
+
+    // Defect 3: a peer that closes cleanly is removed from the connection table.
+    let closing = WSServer(portRange: 8787...8791)
+    do {
+        try closing.start { _ in }
+    } catch {
+        failures.append("FAIL close cleanup — server did not start: \(error)")
+        checkCount += 1
+        return
+    }
+    guard let closingPort = closing.boundPort else {
+        failures.append("FAIL close cleanup — no bound port")
+        checkCount += 1
+        return
+    }
+    let departing = NWConnection(
+        to: .url(URL(string: "ws://127.0.0.1:\(closingPort)/")!),
+        using: WSServer.clientParameters()
+    )
+    departing.start(queue: .global())
+    expectEventually("a connected peer is registered") { closing.connectionCount == 1 }
+    departing.cancel()
+    expectEventually("a closed peer is removed") { closing.connectionCount == 0 }
+    closing.stop()
 }
 
 runMessageTests()
