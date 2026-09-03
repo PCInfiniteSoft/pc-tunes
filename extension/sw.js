@@ -102,6 +102,14 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   const tabId = sender.tab && sender.tab.id;
   if (typeof tabId !== "number") return;
 
+  // Once a tab's window kind is known, label and forward synchronously: two updates
+  // from one tab must not overtake each other on the way to the app.
+  const known = knownTabs.get(tabId);
+  if (known) {
+    sendToApp({ type: "state", tabId, source: known, ...message.payload });
+    return;
+  }
+
   windowKindFor(tabId).then((source) => {
     knownTabs.set(tabId, source);
     sendToApp({ type: "state", tabId, source, ...message.payload });
