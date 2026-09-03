@@ -89,10 +89,19 @@ isolated content script world. `inject.js` runs in the page's own JavaScript con
 The PWA window and a regular Chrome tab can both have YouTube Music open, producing two
 state sources.
 
-**Rule: the PWA always wins.** The service worker resolves each sender's window type
-with `chrome.windows.get(windowId)`. If any connected source lives in a window of type
-`app`, it is the sole active source and all `normal`-window sources are ignored. If no
-app-type window exists, the most recently updated normal tab is used.
+**Rule: the PWA always wins.**
+
+The service worker only *labels* each source: it resolves the sender's window type with
+`chrome.windows.get(windowId)` and stamps every `state` message with
+`source: "app" | "tab"` and the originating `tabId`.
+
+The Swift app owns the arbitration decision. Among all sources it has heard from, it
+picks the most recently updated `"app"` source; if there is none, the most recently
+updated `"tab"` source. Commands carry the chosen `tabId` back to the service worker,
+which forwards them to that exact tab.
+
+Keeping arbitration in the app makes it directly unit-testable and keeps the service
+worker a dumb relay.
 
 ## Protocol
 
@@ -127,13 +136,14 @@ Sent when the YouTube Music tab or window closes.
 ### App to extension
 
 ```json
-{ "type": "cmd", "action": "playPause" }
-{ "type": "cmd", "action": "next" }
-{ "type": "cmd", "action": "prev" }
-{ "type": "cmd", "action": "focusTab" }
+{ "type": "cmd", "action": "playPause", "tabId": 42 }
+{ "type": "cmd", "action": "next", "tabId": 42 }
+{ "type": "cmd", "action": "prev", "tabId": 42 }
+{ "type": "cmd", "action": "focusTab", "tabId": 42 }
 ```
 
-Commands are routed to the currently active source per the arbitration rule.
+`tabId` is the app's arbitration winner. The service worker forwards the command to that
+tab and drops it silently if the tab no longer exists.
 
 ## Components
 
@@ -144,7 +154,7 @@ Commands are routed to the currently active source per the arbitration rule.
 | `manifest.json` | MV3 manifest. Two content scripts on `https://music.youtube.com/*` — one isolated, one `"world": "MAIN"`. Permissions: `tabs`, `windows` is implicit via `tabs`. No host permissions beyond the content script match. |
 | `inject.js` | MAIN world. Reads `navigator.mediaSession.metadata` and the `<video>` element. Executes commands by clicking real player-bar controls. Emits change events. |
 | `content.js` | Isolated world. Bridges `window.postMessage` and `chrome.runtime` messaging in both directions. |
-| `sw.js` | Service worker. Owns the WebSocket client, port discovery, reconnect backoff, keepalive ping, source arbitration, and command routing. |
+| `sw.js` | Service worker. Owns the WebSocket client, port discovery, reconnect backoff, keepalive ping, source labelling, and command forwarding by `tabId`. |
 
 **Control selectors** (`inject.js`):
 
