@@ -1,0 +1,94 @@
+# PC Tunes
+
+A macOS menu bar widget for YouTube Music. Shows the current track and provides
+play/pause, next and previous without leaving whatever app you are in.
+
+## How it works
+
+A Chrome MV3 extension reads playback state from the YouTube Music page and pushes it
+over a loopback WebSocket to a native Swift menu bar app. The app sends transport
+commands back over the same socket.
+
+macOS 15.4 and later block the private MediaRemote framework for third-party apps, so
+reading "now playing" from the system is not possible — the state has to come from the
+page itself.
+
+When YouTube Music is open both as the installed Chrome PWA and as a regular tab, the
+PWA always wins.
+
+## Requirements
+
+- macOS 14 or later
+- Google Chrome
+- Swift toolchain (Command Line Tools is enough — full Xcode is not required)
+
+## Build and install
+
+```bash
+cd app && ./build.sh
+open "PC Tunes.app"
+```
+
+Then load the extension:
+
+1. Open `chrome://extensions`
+2. Enable **Developer mode**
+3. Click **Load unpacked** and select the `extension/` directory
+
+Enable "Launch at login" from the widget's dropdown to have it start automatically.
+
+## Development
+
+```bash
+cd app && swift run PCTunesTests   # run the test suite
+cd app && swift build              # build without bundling
+```
+
+The project has no third-party dependencies. Tests use a small hand-rolled harness in
+`Sources/PCTunesTests/TestKit.swift` because neither XCTest nor swift-testing ships with
+the Command Line Tools.
+
+## Troubleshooting
+
+**The menu bar shows `♪` with no text while music is playing.** Open the service worker
+console from `chrome://extensions` and look for `[PC Tunes] connected on port 8787`. If
+it is absent, the app is not running or every port in 8787-8791 is occupied.
+
+**Next and previous stop working after a YouTube Music update.** The button selectors in
+`extension/inject.js` (`CONTROL_SELECTORS`) need updating against the current DOM.
+
+## Verification status
+
+The following have been verified automatically on this machine and are confirmed
+working:
+
+- `swift run PCTunesTests` passes: `✅ 45 checks passed`, exit code 0.
+- `./build.sh` produces a clean release build and an ad-hoc-signed `PC Tunes.app`
+  bundle using `swift build` alone (no Xcode required — this machine only has the
+  Command Line Tools, and `xcodebuild` is not available).
+- `extension/manifest.json` parses as valid JSON, and `content.js`, `inject.js`, and
+  `sw.js` all pass `node --check` (no syntax errors).
+- The built app launches, binds a loopback listener (confirmed with `lsof`, e.g.
+  `TCP localhost:8787 (LISTEN)`), and quits cleanly, releasing the port.
+
+The following require a human at the keyboard — playing tracks, opening and closing
+Chrome windows, and rebooting are not things an automated agent can do — and have
+**not** been verified. Please work through this checklist and check off each item as
+it passes:
+
+- [ ] Open the YouTube Music PWA and play a track. Title and artist appear in the menu
+      bar within 5s.
+- [ ] Click ⏯ in the dropdown. Playback toggles; the icon in the dropdown flips within
+      1s.
+- [ ] Click ⏭, then ⏮. The track changes and the menu bar text follows.
+- [ ] Also open `https://music.youtube.com` in a regular Chrome tab and play something
+      there. The menu bar still shows the PWA's track, and the transport buttons still
+      control the PWA.
+- [ ] Close the PWA window. Within 15s the widget switches to the regular tab's track.
+- [ ] Close the regular tab too. The menu bar shows the bare `♪` icon and "Not
+      playing"; transport buttons are disabled.
+- [ ] Click "Open YouTube Music" with nothing open. The PWA launches.
+- [ ] With music playing, quit and relaunch `PC Tunes.app`. State reappears within 5s
+      without touching Chrome.
+- [ ] Enable "Launch at login", reboot. The icon returns after login. Then disable it
+      again if unwanted.
