@@ -20,6 +20,7 @@ func runMessageTests() {
     expectEqual(track.album, "Save My Life", "state album")
     expectEqual(track.playing, true, "state playing")
     expectEqual(track.duration, 215, "state duration")
+    expectEqual(track.position, 42.5, "state position")
     expectEqual(track.artwork?.absoluteString, "https://example.com/art.jpg", "state artwork")
 
     // Optional fields may be absent; only type, tabId, source and title are required.
@@ -52,5 +53,48 @@ func runMessageTests() {
     expectEqual(encoded["tabId"] as? Int, 42, "command tabId")
 }
 
+func runArbiterTests() {
+    func track(_ title: String, playing: Bool = true) -> TrackState {
+        TrackState(playing: playing, title: title, artist: "A", album: "B",
+                   artwork: nil, position: 0, duration: 100)
+    }
+    let t0 = Date(timeIntervalSince1970: 1_000)
+
+    // A lone tab source is used.
+    var arbiter = SourceArbiter()
+    arbiter.apply(.state(tabId: 1, source: .tab, track: track("tab song")), at: t0)
+    expectEqual(arbiter.active?.tabId, 1, "lone tab is active")
+    expectEqual(arbiter.active?.track.title, "tab song", "lone tab track")
+
+    // An app source preempts the tab, even when the tab updated more recently.
+    arbiter.apply(.state(tabId: 2, source: .app, track: track("pwa song")), at: t0 + 1)
+    arbiter.apply(.state(tabId: 1, source: .tab, track: track("tab song 2")), at: t0 + 2)
+    expectEqual(arbiter.active?.tabId, 2, "app source preempts newer tab")
+    expectEqual(arbiter.active?.track.title, "pwa song", "app source track wins")
+
+    // Two app windows: the most recent one wins.
+    arbiter.apply(.state(tabId: 3, source: .app, track: track("pwa song 2")), at: t0 + 3)
+    expectEqual(arbiter.active?.tabId, 3, "newest app source wins")
+
+    // Closing app windows falls back to the tab.
+    arbiter.apply(.gone(tabId: 3), at: t0 + 4)
+    expectEqual(arbiter.active?.tabId, 2, "falls back to remaining app source")
+    arbiter.apply(.gone(tabId: 2), at: t0 + 5)
+    expectEqual(arbiter.active?.tabId, 1, "falls back to tab when no app source remains")
+
+    // Closing everything leaves no active source.
+    arbiter.apply(.gone(tabId: 1), at: t0 + 6)
+    expectNil(arbiter.active, "no active source after all are gone")
+
+    // A source that stops sending heartbeats is dropped.
+    var stale = SourceArbiter()
+    stale.apply(.state(tabId: 9, source: .app, track: track("x")), at: t0)
+    stale.dropStale(olderThan: t0 + 14)
+    expectEqual(stale.active?.tabId, 9, "source within the timeout survives")
+    stale.dropStale(olderThan: t0 + 16)
+    expectNil(stale.active, "source past the timeout is dropped")
+}
+
 runMessageTests()
+runArbiterTests()
 finish()
