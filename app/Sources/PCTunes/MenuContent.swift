@@ -49,14 +49,15 @@ struct MenuContent: View {
 
             HStack(spacing: 20) {
                 controlButton("backward.fill", action: model.previous)
+                    .disabled(!model.isConnected)
                 controlButton(
                     model.track?.playing == true ? "pause.fill" : "play.fill",
                     action: model.playPause
                 )
                 controlButton("forward.fill", action: model.next)
+                    .disabled(!model.isConnected)
             }
             .frame(maxWidth: .infinity)
-            .disabled(!model.isConnected)
 
             Divider()
 

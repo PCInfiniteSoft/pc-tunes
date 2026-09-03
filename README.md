@@ -1,7 +1,8 @@
 # PC Tunes
 
 A macOS menu bar widget for YouTube Music. Shows the current track and provides
-play/pause, next and previous without leaving whatever app you are in.
+play/pause, next and previous without leaving whatever app you are in. Pressing play
+with nothing open launches YouTube Music and starts playing.
 
 ## How it works
 
@@ -98,3 +99,5 @@ DOM. The remainder are still open:
       again if unwanted.
 - [ ] Pause playback, leave YouTube Music in the background for six minutes, then check the menu bar still shows the track and the play button still works.
 - [ ] Occupy port 8787 with something else (`nc -l 127.0.0.1 8787`), restart both the app and the extension, and confirm the widget still connects.
+- [ ] With YouTube Music closed entirely, click ⏯ in the dropdown. The PWA opens and
+      playback begins — the queued track if there is one, otherwise the first Quick Pick.

@@ -7,6 +7,7 @@ const BACKOFF_MS = [1000, 2000, 4000, 8000, 30000];
 // be relied on — the worker's can.
 const KEEPALIVE_MS = 5000;
 const HELLO_TIMEOUT_MS = 2000;
+const PENDING_START_MS = 30000;
 
 let socket = null;
 let portIndex = 0;
@@ -20,6 +21,10 @@ const knownTabs = new Map();
 
 /** tabId -> the last state message sent, re-sent on the keepalive tick. */
 const lastState = new Map();
+
+/** Tabs whose bridge has announced itself. Insertion order, most recent last. */
+const readyTabs = new Set();
+let pendingStartAt = 0;
 
 async function windowKindFor(tabId) {
   try {
@@ -57,6 +62,16 @@ function scheduleReconnect() {
     reconnectTimer = null;
     connect();
   }, delay);
+}
+
+function startPlaybackIn(tabId) {
+  chrome.tabs.sendMessage(tabId, { kind: "cmd", action: "startPlayback" }).catch(() => {});
+}
+
+function mostRecentReadyTab() {
+  let latest = null;
+  for (const tabId of readyTabs) latest = tabId;
+  return latest;
 }
 
 function connect() {
@@ -100,6 +115,16 @@ function connect() {
     }
     if (!message || message.type !== "cmd" || typeof message.tabId !== "number") return;
 
+    if (message.action === "startPlayback") {
+      const target = mostRecentReadyTab();
+      if (target !== null) {
+        startPlaybackIn(target);
+      } else {
+        pendingStartAt = Date.now();
+      }
+      return;
+    }
+
     if (message.action === "focusTab") {
       try {
         const tab = await chrome.tabs.get(message.tabId);
@@ -129,9 +154,21 @@ function connect() {
 }
 
 chrome.runtime.onMessage.addListener((message, sender) => {
-  if (!message || message.kind !== "state") return;
+  if (!message) return;
   const tabId = sender.tab && sender.tab.id;
   if (typeof tabId !== "number") return;
+
+  if (message.kind === "ready") {
+    readyTabs.delete(tabId);
+    readyTabs.add(tabId);
+    if (pendingStartAt && Date.now() - pendingStartAt < PENDING_START_MS) {
+      pendingStartAt = 0;
+      startPlaybackIn(tabId);
+    }
+    return;
+  }
+
+  if (message.kind !== "state") return;
 
   // Once a tab's window kind is known, label and forward synchronously: two updates
   // from one tab must not overtake each other on the way to the app.
@@ -152,6 +189,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 });
 
 chrome.tabs.onRemoved.addListener((tabId) => {
+  readyTabs.delete(tabId);
   if (!knownTabs.has(tabId)) return;
   knownTabs.delete(tabId);
   lastState.delete(tabId);

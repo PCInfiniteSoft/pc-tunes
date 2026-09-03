@@ -8,6 +8,16 @@
     next: ".next-button",
     prev: ".previous-button",
   };
+  const START_TIMEOUT_MS = 15000;
+  const START_POLL_MS = 500;
+  // The home page's markup is not ours and has changed before, so try several shapes.
+  const QUICK_PICK_SELECTORS = [
+    "ytmusic-responsive-list-item-renderer ytmusic-play-button-renderer",
+    "ytmusic-responsive-list-item-renderer #play-button",
+    "ytmusic-two-row-item-renderer ytmusic-play-button-renderer",
+    "ytmusic-carousel-shelf-renderer ytmusic-play-button-renderer",
+    "ytmusic-responsive-list-item-renderer a#thumbnail",
+  ];
 
   const playerBar = () => document.querySelector("ytmusic-player-bar");
   const videoEl = () => document.querySelector("video");
@@ -53,9 +63,45 @@
     }, COALESCE_MS);
   }
 
+  /// Resumes the queued track if there is one, otherwise starts the first Quick Pick.
+  /// The page is often still loading when this arrives, so it keeps looking until
+  /// something is playable or the deadline passes.
+  function startPlayback(deadline) {
+    const stopAt = deadline || Date.now() + START_TIMEOUT_MS;
+
+    const video = videoEl();
+    if (video && Number.isFinite(video.duration) && video.duration > 0) {
+      if (video.paused) {
+        video.play();
+      }
+      setTimeout(() => push(true), 300);
+      return;
+    }
+
+    for (const selector of QUICK_PICK_SELECTORS) {
+      const candidate = document.querySelector(selector);
+      if (candidate) {
+        candidate.click();
+        setTimeout(() => push(true), 1000);
+        return;
+      }
+    }
+
+    if (Date.now() < stopAt) {
+      setTimeout(() => startPlayback(stopAt), START_POLL_MS);
+      return;
+    }
+    console.warn("[PC Tunes] nothing to start: no queued track and no Quick Pick found");
+  }
+
   function runCommand(action) {
     // focusTab is handled entirely by the service worker.
     if (action === "focusTab") return;
+
+    if (action === "startPlayback") {
+      startPlayback();
+      return;
+    }
 
     const selector = CONTROL_SELECTORS[action];
     const bar = playerBar();

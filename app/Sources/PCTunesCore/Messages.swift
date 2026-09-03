@@ -92,6 +92,7 @@ public struct OutboundCommand: Encodable, Equatable, Sendable {
         case next
         case prev
         case focusTab
+        case startPlayback
     }
 
     public let type = "cmd"

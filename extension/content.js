@@ -15,4 +15,8 @@
     if (!message || message.kind !== "cmd") return;
     window.postMessage({ __pcTunes: true, dir: "in", action: message.action }, "*");
   });
+
+  // Announced separately from playback state: a page with an empty queue never emits
+  // a state message, but can still be told to start playing.
+  chrome.runtime.sendMessage({ kind: "ready" }).catch(() => {});
 })();

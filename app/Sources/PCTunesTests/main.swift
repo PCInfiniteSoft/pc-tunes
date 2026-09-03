@@ -52,6 +52,11 @@ func runMessageTests() {
     expectEqual(encoded["type"] as? String, "cmd", "command type")
     expectEqual(encoded["action"] as? String, "next", "command action")
     expectEqual(encoded["tabId"] as? Int, 42, "command tabId")
+
+    let cold = OutboundCommand(action: .startPlayback, tabId: -1)
+    let coldEncoded = try! JSONSerialization.jsonObject(with: cold.encoded()) as! [String: Any]
+    expectEqual(coldEncoded["action"] as? String, "startPlayback", "cold-start command action")
+    expectEqual(coldEncoded["tabId"] as? Int, -1, "cold-start command carries the no-tab sentinel")
 }
 
 func runArbiterTests() {

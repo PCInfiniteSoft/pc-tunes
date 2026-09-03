@@ -7,6 +7,8 @@ import SwiftUI
 final class PlayerModel: ObservableObject {
     /// A source is considered gone this many seconds after its last heartbeat.
     private static let staleAfter: TimeInterval = 15
+    /// Addressed to no particular tab: the extension resolves the target itself.
+    private static let noTab = -1
 
     @Published private(set) var track: TrackState?
     @Published private(set) var activeTabId: Int?
@@ -68,7 +70,16 @@ final class PlayerModel: ObservableObject {
         }
     }
 
-    func playPause() { send(.playPause) }
+    func playPause() {
+        guard let tabId = activeTabId else {
+            // Nothing is connected. Ask the extension to start playback as soon as a
+            // YouTube Music page appears, then open the PWA to make one appear.
+            server.send(OutboundCommand(action: .startPlayback, tabId: Self.noTab))
+            YouTubeMusicLauncher.open()
+            return
+        }
+        server.send(OutboundCommand(action: .playPause, tabId: tabId))
+    }
     func next() { send(.next) }
     func previous() { send(.prev) }
 
