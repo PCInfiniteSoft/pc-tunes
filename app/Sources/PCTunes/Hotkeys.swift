@@ -2,7 +2,7 @@ import Carbon.HIToolbox
 import Combine
 import PCTunesCore
 
-/// Registers PC Tunes' three global hotkeys with Carbon's `RegisterEventHotKey`,
+/// Registers PC Tunes' global hotkeys with Carbon's `RegisterEventHotKey`,
 /// deliberately **not** `NSEvent.addGlobalMonitorForEvents`. The `NSEvent` route only
 /// delivers global key events to apps granted Accessibility permission, which is a real
 /// barrier at install time for a tool whose whole appeal is being small and asking for
@@ -10,30 +10,13 @@ import PCTunesCore
 /// apps use for exactly this reason. Do not "modernise" this to `NSEvent`; that would
 /// reintroduce the permission prompt this design deliberately avoids.
 @MainActor
-final class Hotkeys {
+final class Hotkeys: ObservableObject {
     static let shared = Hotkeys()
 
-    enum Binding: UInt32, CaseIterable {
-        case playPause = 1
-        case next = 2
-        case previous = 3
-
-        fileprivate var keyCode: UInt32 {
-            switch self {
-            case .playPause: return UInt32(kVK_Space)
-            case .next: return UInt32(kVK_RightArrow)
-            case .previous: return UInt32(kVK_LeftArrow)
-            }
-        }
-
-        fileprivate var label: String {
-            switch self {
-            case .playPause: return "play/pause (⌃⌥Space)"
-            case .next: return "next (⌃⌥→)"
-            case .previous: return "previous (⌃⌥←)"
-            }
-        }
-    }
+    /// Actions whose combo the system refused, almost always because another app got
+    /// there first. Published so the settings window can say which one is dead rather
+    /// than leaving the user to discover it by pressing keys and getting nothing.
+    @Published private(set) var unavailable: Set<HotkeyAction> = []
 
     /// Four-char signature identifying PC Tunes' hotkeys to Carbon, packed the way
     /// `OSType`/`FourCharCode` constants conventionally are.
@@ -41,57 +24,61 @@ final class Hotkeys {
         "PCTn".utf8.reduce(OSType(0)) { ($0 << 8) | OSType($1) }
     }()
 
-    private var hotKeyRefs: [Binding: EventHotKeyRef] = [:]
+    private var hotKeyRefs: [HotkeyAction: EventHotKeyRef] = [:]
     private var eventHandlerRef: EventHandlerRef?
     private weak var model: PlayerModel?
     private var cancellable: AnyCancellable?
 
     private init() {}
 
-    /// Starts watching `Settings.shared.hotkeysEnabled`. `@Published`'s publisher hands
-    /// a new subscriber the current value immediately, so this registers right away
-    /// when hotkeys are already on, and again on every later flip — one code path for
-    /// both "at launch" and "toggled".
+    /// Starts watching the hotkey settings. `@Published`'s publisher hands a new
+    /// subscriber the current value immediately, so this registers right away when
+    /// hotkeys are already on, and again on every later change — one code path for
+    /// "at launch", "toggled" and "rebound".
     func start(model: PlayerModel) {
         self.model = model
         cancellable = Settings.shared.$hotkeysEnabled
-            .removeDuplicates()
-            .sink { [weak self] enabled in
-                if enabled {
-                    self?.register()
-                } else {
-                    self?.unregisterAll()
-                }
+            .combineLatest(Settings.shared.$hotkeyCombos)
+            .removeDuplicates { $0 == $1 }
+            .sink { [weak self] enabled, combos in
+                self?.apply(enabled: enabled, combos: combos)
             }
     }
 
-    private func register() {
-        guard hotKeyRefs.isEmpty else { return }
+    private func apply(enabled: Bool, combos: [HotkeyAction: KeyCombo]) {
+        // Rebinding replaces the lot rather than diffing: three registrations cost
+        // nothing, and a diff would have to reason about a combo moving between two
+        // actions, where releasing the old one has to happen before claiming the new.
+        unregisterAll()
+        guard enabled else {
+            unavailable = []
+            return
+        }
         installHandlerIfNeeded()
 
-        for binding in Binding.allCases {
+        var failed: Set<HotkeyAction> = []
+        for action in HotkeyAction.allCases {
+            let combo = combos[action] ?? action.defaultCombo
             var hotKeyRef: EventHotKeyRef?
-            let hotKeyID = EventHotKeyID(signature: Self.signature, id: binding.rawValue)
+            let hotKeyID = EventHotKeyID(signature: Self.signature, id: action.rawValue)
             let status = RegisterEventHotKey(
-                binding.keyCode,
-                UInt32(controlKey | optionKey),
+                combo.keyCode,
+                combo.modifiers,
                 hotKeyID,
                 GetApplicationEventTarget(),
                 0,
                 &hotKeyRef
             )
+            // One combo already belonging to another app is no reason to drop the other
+            // two — the user rebinds the one that clashed and keeps the rest working.
             guard status == noErr, let hotKeyRef else {
-                NSLog("[PC Tunes] failed to register hotkey \(binding.label): OSStatus \(status)")
-                // Another app already owns one of the combinations. Leaving the rest
-                // registered with the setting still on would be half-wired and silently
-                // dead for the one that failed, so undo everything and reflect the
-                // setting back off instead.
-                unregisterAll()
-                Task { @MainActor in Settings.shared.hotkeysEnabled = false }
-                return
+                NSLog("[PC Tunes] failed to register hotkey for \(action.title): OSStatus \(status)")
+                failed.insert(action)
+                continue
             }
-            hotKeyRefs[binding] = hotKeyRef
+            hotKeyRefs[action] = hotKeyRef
         }
+        unavailable = failed
     }
 
     private func unregisterAll() {
@@ -117,7 +104,7 @@ final class Hotkeys {
                     nil, MemoryLayout<EventHotKeyID>.size, nil, &hotKeyID
                 )
                 guard status == noErr, hotKeyID.signature == Hotkeys.signature,
-                      let binding = Hotkeys.Binding(rawValue: hotKeyID.id)
+                      let action = HotkeyAction(rawValue: hotKeyID.id)
                 else {
                     return OSStatus(eventNotHandledErr)
                 }
@@ -125,7 +112,7 @@ final class Hotkeys {
                 // callback with no actor isolation the compiler can see — hop
                 // explicitly before touching anything MainActor-isolated.
                 Task { @MainActor in
-                    Hotkeys.shared.handle(binding)
+                    Hotkeys.shared.handle(action)
                 }
                 return noErr
             },
@@ -133,8 +120,8 @@ final class Hotkeys {
         )
     }
 
-    private func handle(_ binding: Binding) {
-        switch binding {
+    private func handle(_ action: HotkeyAction) {
+        switch action {
         case .playPause: model?.playPause()
         case .next: model?.next()
         case .previous: model?.previous()

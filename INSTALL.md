@@ -95,6 +95,9 @@ You should see "PC Tunes Bridge" appear in the extension list.
 - [ ] Play/pause, next and previous all work from the dropdown
 - [ ] (Optional) "Launch at login" is turned on from the dropdown if you want PC Tunes
       to start automatically
+- [ ] (Optional) Settings… → Hotkeys → "Global hotkeys" on, then click a shortcut and
+      press the keys you want. A shortcut already taken by another app is marked
+      "Already in use by another app" — the other two keep working.
 
 ## If it didn't work
 

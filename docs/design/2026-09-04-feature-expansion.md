@@ -76,7 +76,7 @@ Four features need persisted preferences, which is more than a dropdown should c
 | Menu bar title length | 35 characters |
 | Show track-change notifications | off |
 | Global hotkeys enabled | off |
-| Hotkey bindings | ⌃⌥Space, ⌃⌥→, ⌃⌥← |
+| Hotkey bindings | ⌃⌥Space, ⌃⌥→, ⌃⌥← (rebindable) |
 
 Stored in `UserDefaults`, read through a single `Settings` observable object so the
 views bind to it directly. The dropdown gets a "Settings…" item opening a small window;
@@ -93,6 +93,17 @@ for a tool whose whole appeal is that it is small. `RegisterEventHotKey` needs n
 permission at all and is what most menu bar apps use.
 
 Registered only while the setting is on, and unregistered when it is turned off.
+
+Bindings are the user's to change, so each is recorded by a click-then-press control in
+the settings window and stored as a virtual key code plus a Carbon modifier mask. Two
+constraints fall out of that being a *global* shortcut: it must carry at least one of
+⌃, ⌥ or ⌘ — shift alone would swallow an ordinary typing key system-wide — and the key's
+label is resolved against the live keyboard layout with `UCKeyTranslate`, so a Thai or
+Dvorak user sees the legend on the key they actually pressed rather than the US one.
+
+A combination another app already owns is reported per binding rather than turning the
+whole feature off: the other two still work, and the settings window says which one is
+dead instead of leaving it to be discovered by pressing keys and getting nothing.
 
 ## Search
 

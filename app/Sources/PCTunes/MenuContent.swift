@@ -90,7 +90,14 @@ struct MenuContent: View {
                             .lineLimit(1)
                     }
                 }
-                Spacer(minLength: 0)
+                Spacer(minLength: 8)
+                // Beside the track rather than in the transport row: rating is about
+                // this song, where the transport is about playback in general.
+                VStack(spacing: 10) {
+                    controlButton(thumbsUpSymbol, action: model.like)
+                    controlButton(thumbsDownSymbol, action: model.dislike)
+                }
+                .disabled(!model.extensionConnected)
             }
         } else {
             HStack(spacing: 12) {
@@ -146,10 +153,6 @@ struct MenuContent: View {
             .disabled(!model.extensionConnected)
             controlButton("forward.fill", action: model.next)
                 .disabled(!model.isConnected)
-            controlButton(thumbsUpSymbol, action: model.like)
-                .disabled(!model.extensionConnected)
-            controlButton(thumbsDownSymbol, action: model.dislike)
-                .disabled(!model.extensionConnected)
         }
         .frame(maxWidth: .infinity)
     }

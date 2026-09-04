@@ -59,12 +59,13 @@ See [INSTALL.md](INSTALL.md) for step-by-step setup (English), or
 - An up-next list, fetched on demand when you expand it
 - In-menu search that plays the first result
 - Cold-start playback: press play with nothing open and PC Tunes launches YouTube
-  Music hidden and starts something playing
+  Music hidden — it stays in the Dock, never taking the screen — and starts playing
 - Launch at login
 - A settings window (menu bar title length, notifications, hotkeys)
 - Optional notifications when the track changes
-- Optional global hotkeys (⌃⌥Space play/pause, ⌃⌥→ next, ⌃⌥← previous) — registered
-  with Carbon's `RegisterEventHotKey`, which needs no Accessibility permission
+- Optional global hotkeys, rebindable in Settings (⌃⌥Space play/pause, ⌃⌥→ next,
+  ⌃⌥← previous out of the box) — registered with Carbon's `RegisterEventHotKey`, which
+  needs no Accessibility permission
 - An in-dropdown notice when the extension can't do something, most often because a
   page selector no longer matches
 

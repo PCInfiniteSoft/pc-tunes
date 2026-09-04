@@ -26,7 +26,15 @@ enum YouTubeMusicLauncher {
             NSWorkspace.shared.openApplication(
                 at: URL(fileURLWithPath: app),
                 configuration: configuration
-            )
+            ) { running, error in
+                if let error {
+                    NSLog("[PC Tunes] could not open \(app): \(error)")
+                    return
+                }
+                if !activating, let running {
+                    keepHidden(running)
+                }
+            }
             return
         }
         // No installed web app — hand the URL to whatever the user has set as their
@@ -41,6 +49,38 @@ enum YouTubeMusicLauncher {
                 NSLog("[PC Tunes] could not open \(url) with the default browser: \(error)")
             }
         }
+    }
+
+    /// How long a launch is watched for a window that unhides the app behind our back.
+    private static let hideWindowSeconds: TimeInterval = 8
+    private static let hideInterval: TimeInterval = 0.25
+
+    /// Keeps a freshly launched web app out of the way.
+    ///
+    /// `OpenConfiguration.hides` is applied at launch, but a Chromium web app shim only
+    /// creates its window once the browser process is up — and showing that window
+    /// unhides the app again, so the flag alone lets the window appear a beat later.
+    /// Re-hiding on a short timer puts it back before it has been on screen long enough
+    /// to steal focus or a Space switch, and leaves the app running in the Dock, which
+    /// is where someone who wants to see it can click it.
+    ///
+    /// It stops as soon as the app is hidden with a window to its name, so a user who
+    /// deliberately clicks the Dock icon during those few seconds is not fought with.
+    private static func keepHidden(_ app: NSRunningApplication) {
+        let deadline = Date().addingTimeInterval(hideWindowSeconds)
+
+        func tick() {
+            guard !app.isTerminated, Date() < deadline else { return }
+            if app.isHidden {
+                // Hidden and finished launching: the window exists and is put away.
+                if app.isFinishedLaunching { return }
+            } else {
+                app.hide()
+            }
+            DispatchQueue.main.asyncAfter(deadline: .now() + hideInterval, execute: tick)
+        }
+
+        DispatchQueue.main.async(execute: tick)
     }
 
     /// Every `.app` directly inside `~/Applications` or one level below it, paired with

@@ -16,6 +16,7 @@ final class Settings: ObservableObject {
         static let menuBarTitleLength = "menuBarTitleLength"
         static let showNotifications = "showNotifications"
         static let hotkeysEnabled = "hotkeysEnabled"
+        static let hotkeyCombos = "hotkeyCombos"
     }
 
     private let defaults: UserDefaults
@@ -43,6 +44,26 @@ final class Settings: ObservableObject {
         didSet { defaults.set(hotkeysEnabled, forKey: Key.hotkeysEnabled) }
     }
 
+    /// One combo per action, always complete: a missing or unreadable entry reads back
+    /// as that action's default, so nothing downstream has to handle an unbound action.
+    @Published var hotkeyCombos: [HotkeyAction: KeyCombo] {
+        didSet {
+            var stored: [String: [String: Int]] = [:]
+            for (action, combo) in hotkeyCombos {
+                stored[String(action.rawValue)] = combo.stored
+            }
+            defaults.set(stored, forKey: Key.hotkeyCombos)
+        }
+    }
+
+    func resetHotkeyCombos() {
+        hotkeyCombos = Self.defaultCombos
+    }
+
+    private static var defaultCombos: [HotkeyAction: KeyCombo] {
+        Dictionary(uniqueKeysWithValues: HotkeyAction.allCases.map { ($0, $0.defaultCombo) })
+    }
+
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
@@ -55,5 +76,10 @@ final class Settings: ObservableObject {
         }
         showNotifications = defaults.bool(forKey: Key.showNotifications)
         hotkeysEnabled = defaults.bool(forKey: Key.hotkeysEnabled)
+
+        let stored = defaults.dictionary(forKey: Key.hotkeyCombos)
+        hotkeyCombos = Dictionary(uniqueKeysWithValues: HotkeyAction.allCases.map { action in
+            (action, KeyCombo(stored: stored?[String(action.rawValue)]) ?? action.defaultCombo)
+        })
     }
 }

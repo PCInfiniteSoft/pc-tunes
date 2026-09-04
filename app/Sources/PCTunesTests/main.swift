@@ -529,6 +529,59 @@ func runServerResilienceTests() {
     closing.stop()
 }
 
+func runKeyComboTests() {
+    let defaultPlayPause = HotkeyAction.playPause.defaultCombo
+    expectEqual(defaultPlayPause.keyCode, KeyCombo.space, "play/pause defaults to Space")
+    expectEqual(
+        defaultPlayPause.modifiers,
+        KeyCombo.control | KeyCombo.option,
+        "play/pause defaults to control-option"
+    )
+    expectEqual(
+        defaultPlayPause.displayString(keyLabel: "Space"),
+        "\u{2303}\u{2325}Space",
+        "modifier symbols render in menu order"
+    )
+    expectEqual(
+        KeyCombo(keyCode: 1, modifiers: KeyCombo.command | KeyCombo.shift | KeyCombo.option | KeyCombo.control)
+            .modifierSymbols,
+        "\u{2303}\u{2325}\u{21E7}\u{2318}",
+        "all four modifiers render in menu order"
+    )
+
+    expectEqual(
+        KeyCombo(keyCode: 1, modifiers: 0xFFFF).modifiers,
+        KeyCombo.command | KeyCombo.shift | KeyCombo.option | KeyCombo.control,
+        "bits outside the four modifier masks are dropped"
+    )
+    expect(
+        !KeyCombo(keyCode: 1, modifiers: KeyCombo.shift).hasRequiredModifier,
+        "shift alone is not enough of a modifier"
+    )
+    expect(
+        KeyCombo(keyCode: 1, modifiers: KeyCombo.command).hasRequiredModifier,
+        "command alone is enough of a modifier"
+    )
+
+    expectEqual(KeyCombo.specialKeyName(for: KeyCombo.leftArrow), "\u{2190}", "the left arrow is named")
+    expect(KeyCombo.specialKeyName(for: 0) == nil, "a printable key has no fixed name")
+
+    let stored = KeyCombo(keyCode: 40, modifiers: KeyCombo.command).stored
+    expectEqual(KeyCombo(stored: stored), KeyCombo(keyCode: 40, modifiers: KeyCombo.command), "a combo survives storage")
+    expect(KeyCombo(stored: nil) == nil, "a missing stored combo is rejected")
+    expect(KeyCombo(stored: ["keyCode": 40]) == nil, "a stored combo without modifiers is rejected")
+    expect(
+        KeyCombo(stored: ["keyCode": 40, "modifiers": Int(KeyCombo.shift)]) == nil,
+        "a stored combo with no real modifier is rejected"
+    )
+    expect(
+        KeyCombo(stored: ["keyCode": -1, "modifiers": Int(KeyCombo.command)]) == nil,
+        "a stored combo with an impossible key code is rejected"
+    )
+
+    expectEqual(Set(HotkeyAction.allCases.map(\.rawValue)), [1, 2, 3], "hotkey action ids are stable")
+}
+
 runMessageTests()
 runProtocolTests()
 runArbiterTests()
@@ -537,4 +590,5 @@ runMenuBarTitleLengthClampTests()
 runWebAppTests()
 runServerTests()
 runServerResilienceTests()
+runKeyComboTests()
 finish()

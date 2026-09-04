@@ -6,6 +6,7 @@ import SwiftUI
 /// sync with it.
 struct SettingsView: View {
     @ObservedObject private var settings = Settings.shared
+    @ObservedObject private var hotkeys = Hotkeys.shared
 
     /// Deliberately longer than `MenuBarTitle.lengthRange`'s upper bound, so the
     /// preview line actually shows truncation happening across the whole slider range
@@ -46,23 +47,44 @@ struct SettingsView: View {
 
             Section("Hotkeys") {
                 Toggle("Global hotkeys", isOn: $settings.hotkeysEnabled)
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("⌃⌥Space — Play/Pause")
-                    Text("⌃⌥→ — Next")
-                    Text("⌃⌥← — Previous")
+
+                ForEach(HotkeyAction.allCases, id: \.self) { action in
+                    LabeledContent(action.title) {
+                        VStack(alignment: .trailing, spacing: 2) {
+                            KeyRecorder(combo: binding(for: action))
+                            if hotkeys.unavailable.contains(action) {
+                                Text("Already in use by another app")
+                                    .font(.caption)
+                                    .foregroundStyle(.orange)
+                            }
+                        }
+                    }
+                    .disabled(!settings.hotkeysEnabled)
                 }
-                .font(.caption.monospaced())
-                .foregroundStyle(.secondary)
-                Text("These bindings are fixed and cannot be changed in this version.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
+
+                HStack {
+                    Text("Shortcuts need at least one of ⌃, ⌥ or ⌘.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Reset to Defaults") { settings.resetHotkeyCombos() }
+                }
             }
         }
         // `.grouped` rather than the default automatic style: the automatic one lays a
         // form out in two columns sized to the widest label, which for these labels is
         // wider than any reasonable window and pushed the first row off both edges.
         .formStyle(.grouped)
-        .frame(width: 420, height: 500)
+        .frame(width: 440, height: 560)
+    }
+
+    /// `Settings.hotkeyCombos` holds an entry for every action, so this reads a value
+    /// rather than an optional the view would have to second-guess. Writing through it
+    /// persists the change and re-registers the hotkey in one step.
+    private func binding(for action: HotkeyAction) -> Binding<KeyCombo> {
+        Binding(
+            get: { settings.hotkeyCombos[action] ?? action.defaultCombo },
+            set: { settings.hotkeyCombos[action] = $0 }
+        )
     }
 }
