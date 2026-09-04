@@ -6,7 +6,7 @@ struct PCTunesApp: App {
 
     var body: some Scene {
         MenuBarExtra {
-            MenuContent(model: model)
+            MenuContent(model: model, openSettings: {})
         } label: {
             if let title = model.menuBarTitle {
                 Label { Text(title) } icon: { Image(nsImage: MenuBarIcon.image) }
