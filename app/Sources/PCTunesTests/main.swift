@@ -139,6 +139,36 @@ func runMenuBarTitleTests() {
     )
 }
 
+func runWebAppTests() {
+    let candidates = [
+        WebAppCandidate(path: "/Apps/Slack.app", shortcutURL: nil),
+        WebAppCandidate(path: "/Apps/YouTube.app", shortcutURL: "https://www.youtube.com/"),
+        // Localized name, different browser, query string — none of it should matter.
+        WebAppCandidate(
+            path: "/Apps/Brave Apps.localized/ยูทูบ มิวสิก.app",
+            shortcutURL: "https://music.youtube.com/?source=pwa"
+        ),
+    ]
+    expectEqual(
+        ChromiumWebApp.pick(host: "music.youtube.com", from: candidates),
+        "/Apps/Brave Apps.localized/ยูทูบ มิวสิก.app",
+        "matches on the shortcut URL, not the bundle name"
+    )
+    expectEqual(
+        ChromiumWebApp.pick(host: "MUSIC.YouTube.COM", from: candidates),
+        "/Apps/Brave Apps.localized/ยูทูบ มิวสิก.app",
+        "host matching is case-insensitive"
+    )
+    expectNil(
+        ChromiumWebApp.pick(host: "open.spotify.com", from: candidates),
+        "an absent web app is not matched"
+    )
+    expectNil(
+        ChromiumWebApp.pick(host: "music.youtube.com", from: []),
+        "an empty candidate list yields nothing"
+    )
+}
+
 /// Polls `condition` until it holds or the timeout expires, recording one check.
 func expectEventually(
     _ label: String, timeout: TimeInterval = 5, _ condition: () -> Bool
@@ -383,6 +413,7 @@ func runServerResilienceTests() {
 runMessageTests()
 runArbiterTests()
 runMenuBarTitleTests()
+runWebAppTests()
 runServerTests()
 runServerResilienceTests()
 finish()
