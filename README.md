@@ -86,11 +86,9 @@ release. A few things are worth knowing before you install it:
   can change without notice. When a selector breaks, the one control it drove stops
   working, the page console gets a `console.warn`, and the app surfaces a notice in
   the dropdown. The selectors themselves live in `extension/inject.js` as clearly
-  named constants (`CONTROL_SELECTORS`, `QUICK_PICK_SELECTORS`,
-  `SEARCH_RESULT_SELECTORS`, and so on) so fixing a break is a matter of updating one
+  named constants and helpers (`CONTROL_SELECTORS`, `LIKE_RENDERER_SELECTORS`,
+  `firstPlayableLink`, and so on) so fixing a break is a matter of updating one
   constant, not reverse-engineering the file.
-- **Search and the up-next list are the least tested parts.** Their selectors have
-  not been verified against the live page the way the transport controls have.
 - **Chrome only, in practice.** Web app discovery itself is browser-agnostic — it
   matches a Chromium web app bundle's `CrAppModeShortcutURL`, not anything
   Chrome-specific — and the extension is plain Manifest V3 with nothing Chrome-only in
@@ -162,7 +160,6 @@ This is a small, single-maintainer hobby project — issues and pull requests ar
 welcome, especially:
 
 - Confirming the extension actually works, unmodified, in Brave or Edge
-- Verifying and fixing the search and up-next selectors against the live page
 - Fixing a selector in `extension/inject.js` after a YouTube Music markup change
 
 The test suite is a small hand-rolled harness (`app/Sources/PCTunesTests/TestKit.swift`)

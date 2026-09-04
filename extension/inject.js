@@ -10,56 +10,51 @@
   };
   const START_TIMEOUT_MS = 15000;
   const START_POLL_MS = 500;
-  // The home page's markup is not ours and has changed before, so try several shapes.
-  const QUICK_PICK_SELECTORS = [
-    "ytmusic-responsive-list-item-renderer ytmusic-play-button-renderer",
-    "ytmusic-responsive-list-item-renderer #play-button",
-    "ytmusic-two-row-item-renderer ytmusic-play-button-renderer",
-    "ytmusic-carousel-shelf-renderer ytmusic-play-button-renderer",
-    "ytmusic-responsive-list-item-renderer a#thumbnail",
-  ];
-  // The like-button renderer sits in the player bar and carries a `like-status`
-  // attribute of "LIKE", "DISLIKE" or "INDIFFERENT".
+  // The like-button renderer sits in the visible player bar (see `playerBar`) and
+  // carries a `like-status` attribute of "LIKE", "DISLIKE" or "INDIFFERENT". Verified
+  // present, by this id, with a track loaded. `ytmusic-like-button-renderer` elements
+  // also exist outside the player bar, belonging to menu renderers for other tracks —
+  // scoping the lookup to the (correctly-chosen) player bar is what keeps this on the
+  // currently-playing track rather than one of those.
   const LIKE_RENDERER_SELECTORS = [
-    "ytmusic-like-button-renderer",
     "#like-button-renderer",
+    "ytmusic-like-button-renderer",
   ];
-  const LIKE_BUTTON_SELECTORS = [
-    "#button-shape-like button",
-    "yt-button-shape#like button",
-    "button[aria-label='Like']",
-  ];
-  const DISLIKE_BUTTON_SELECTORS = [
-    "#button-shape-dislike button",
-    "yt-button-shape#dislike button",
-    "button[aria-label='Dislike']",
-  ];
+  // The renderer holds exactly two <button> elements with no id or class of their own,
+  // each wrapped in a yt-button-shape, in DOM order: like first, dislike second.
+  // Their aria-label ("Like"/"Dislike") is a localized, English-only string, so it
+  // cannot be matched on for anyone whose YouTube is not in English — position within
+  // the renderer is the only language-independent signal available.
+  const RATING_BUTTON_INDEX = { like: 0, dislike: 1 };
   const QUEUE_MAX = 20;
   const QUEUE_ITEM_SELECTORS = [
     "ytmusic-player-queue-item",
   ];
-  const QUEUE_TITLE_SELECTORS = [
-    ".song-title",
-    ".title",
-    "yt-formatted-string.song-title",
-  ];
-  const QUEUE_ARTIST_SELECTORS = [
-    ".byline",
-    ".subtitle",
-    "yt-formatted-string.byline",
-  ];
-  // Reuses the Quick Pick shapes where the search results page renders the same
-  // list-item renderer, plus a couple of search-specific guesses.
-  const SEARCH_RESULT_SELECTORS = [
-    "ytmusic-shelf-renderer ytmusic-responsive-list-item-renderer ytmusic-play-button-renderer",
-    "ytmusic-shelf-renderer ytmusic-responsive-list-item-renderer #play-button",
-    "ytmusic-section-list-renderer ytmusic-responsive-list-item-renderer #play-button",
-    "ytmusic-responsive-list-item-renderer a#thumbnail",
-  ];
+  // Verified against a loaded queue (51 items) with Thai-text tracks: both resolve
+  // inside `ytmusic-player-queue-item`.
+  const QUEUE_TITLE_SELECTOR = ".song-title";
+  const QUEUE_ARTIST_SELECTOR = ".byline";
   const SEARCH_PENDING_KEY = "pcTunesPendingSearch";
 
-  const playerBar = () => document.querySelector("ytmusic-player-bar");
+  /// Two player bars exist in the page; only one is ever visible, and the hidden one
+  /// carries a full set of identical-looking controls that do nothing. Verified by
+  /// clicking `.next-button` inside the visible bar and observing
+  /// `navigator.mediaSession.metadata` change, and `#play-pause-button` toggling
+  /// `video.paused` both ways.
+  const playerBar = () =>
+    [...document.querySelectorAll("ytmusic-player-bar")].find((bar) => bar.offsetParent !== null) ??
+    document.querySelector("ytmusic-player-bar");
   const videoEl = () => document.querySelector("video");
+
+  /// The first playable item on the page.
+  ///
+  /// A song links to `watch?v=`; an artist links to `channel/` and an album to
+  /// `browse/`, so this is what tells a playable result apart from a navigable one.
+  /// It holds on the home page (verified: 14 such links) and on search results alike
+  /// (search results carry no play-button component at all, and the first result is
+  /// often the artist rather than a song), and unlike a component name it does not
+  /// depend on which shelf the page happens to be rendering.
+  const firstPlayableLink = () => document.querySelector('a[href*="watch?v="]');
 
   function notice(text) {
     window.postMessage({ __pcTunes: true, dir: "out", kind: "notice", text }, "*");
@@ -87,27 +82,24 @@
     return undefined;
   }
 
-  function clickRatingButton(selectors, label) {
+  function clickRatingButton(kind) {
     const renderer = likeRenderer();
     const button = renderer
-      ? selectors.map((selector) => renderer.querySelector(selector)).find(Boolean)
+      ? renderer.querySelectorAll("button")[RATING_BUTTON_INDEX[kind]]
       : null;
     if (button) {
       button.click();
       setTimeout(() => push(true), 300);
       return;
     }
-    console.warn(`[PC Tunes] ${label} control not found`);
+    console.warn(`[PC Tunes] ${kind} control not found`);
     notice("Like and dislike are unavailable — YouTube Music's page has changed.");
   }
 
-  function firstText(scope, selectors) {
-    for (const selector of selectors) {
-      const el = scope.querySelector(selector);
-      const text = el && el.textContent && el.textContent.trim();
-      if (text) return text;
-    }
-    return "";
+  function firstText(scope, selector) {
+    const el = scope.querySelector(selector);
+    const text = el && el.textContent && el.textContent.trim();
+    return text || "";
   }
 
   /// Reads the up-next list, capped at QUEUE_MAX. An empty or missing list is ordinary
@@ -124,9 +116,9 @@
     const items = [];
     for (const node of nodes) {
       if (items.length >= QUEUE_MAX) break;
-      const title = firstText(node, QUEUE_TITLE_SELECTORS);
+      const title = firstText(node, QUEUE_TITLE_SELECTOR);
       if (!title) continue;
-      items.push({ title, artist: firstText(node, QUEUE_ARTIST_SELECTORS) });
+      items.push({ title, artist: firstText(node, QUEUE_ARTIST_SELECTOR) });
     }
     return items;
   }
@@ -177,9 +169,10 @@
     }, COALESCE_MS);
   }
 
-  /// Resumes the queued track if there is one, otherwise starts the first Quick Pick.
-  /// The page is often still loading when this arrives, so it keeps looking until
-  /// something is playable or the deadline passes.
+  /// Resumes the queued track if there is one, otherwise clicks the first playable
+  /// link on the page (see `firstPlayableLink`). The page is often still loading when
+  /// this arrives, so it keeps looking until something is playable or the deadline
+  /// passes.
   function startPlayback(deadline) {
     const stopAt = deadline || Date.now() + START_TIMEOUT_MS;
 
@@ -192,31 +185,27 @@
       return;
     }
 
-    for (const selector of QUICK_PICK_SELECTORS) {
-      const candidate = document.querySelector(selector);
-      if (candidate) {
-        candidate.click();
-        setTimeout(() => push(true), 1000);
-        return;
-      }
+    const link = firstPlayableLink();
+    if (link) {
+      link.click();
+      setTimeout(() => push(true), 1000);
+      return;
     }
 
     if (Date.now() < stopAt) {
       setTimeout(() => startPlayback(stopAt), START_POLL_MS);
       return;
     }
-    console.warn("[PC Tunes] nothing to start: no queued track and no Quick Pick found");
-    notice("Couldn't start playback — no queued track or Quick Pick was found. YouTube Music's page may have changed.");
+    console.warn("[PC Tunes] nothing to start: no queued track and no playable link found");
+    notice("Couldn't start playback — no queued track or playable item was found. YouTube Music's page may have changed.");
   }
 
-  /// Polls for the first playable search result and clicks it, mirroring
-  /// `startPlayback`'s deadline-and-poll shape. Used both right after a `search`
-  /// command and, via `resumePendingSearch`, after the navigation it causes reloads
-  /// this script.
+  /// Polls for the first playable search result — the first `watch?v=` link, via
+  /// `firstPlayableLink` — and clicks it, mirroring `startPlayback`'s
+  /// deadline-and-poll shape. Used both right after a `search` command and, via
+  /// `resumePendingSearch`, after the navigation it causes reloads this script.
   function pollSearchResult(deadline) {
-    const candidate = SEARCH_RESULT_SELECTORS
-      .map((selector) => document.querySelector(selector))
-      .find(Boolean);
+    const candidate = firstPlayableLink();
     if (candidate) {
       candidate.click();
       setTimeout(() => push(true), 1000);
@@ -275,12 +264,12 @@
     }
 
     if (action === "like") {
-      clickRatingButton(LIKE_BUTTON_SELECTORS, "like");
+      clickRatingButton("like");
       return;
     }
 
     if (action === "dislike") {
-      clickRatingButton(DISLIKE_BUTTON_SELECTORS, "dislike");
+      clickRatingButton("dislike");
       return;
     }
 
