@@ -9,6 +9,12 @@ const KEEPALIVE_MS = 5000;
 const HELLO_TIMEOUT_MS = 3000;
 const PENDING_START_MS = 30000;
 
+/// Chrome terminates an idle MV3 service worker and its pending timers with it, so a
+/// reconnect armed with setTimeout is lost the moment the worker sleeps — which is
+/// exactly what happens when the app quits and the socket closes. An alarm survives
+/// termination and restarts the worker, so it is the only reliable way back.
+const RECONNECT_ALARM = "pc-tunes-reconnect";
+
 let socket = null;
 let portIndex = 0;
 let attempt = 0;
@@ -197,6 +203,14 @@ function connect() {
   };
 }
 
+/// A floor under `scheduleReconnect`'s setTimeout backoff, not a replacement for it:
+/// Chrome may terminate the worker (and the pending timeout) while disconnected, so
+/// this periodic alarm is what wakes the worker back up. `connect()`'s own re-entry
+/// guard makes firing it during a healthy session a cheap no-op.
+function armReconnectAlarm() {
+  chrome.alarms.create(RECONNECT_ALARM, { periodInMinutes: 0.5 });
+}
+
 /// Builds a state message from a page-supplied payload.
 ///
 /// The fields are copied one by one rather than spread: `inject.js` runs in the page's
@@ -308,6 +322,18 @@ chrome.tabs.onRemoved.addListener((tabId) => {
   forgetTab(tabId);
 });
 
-chrome.runtime.onStartup.addListener(connect);
-chrome.runtime.onInstalled.addListener(connect);
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name !== RECONNECT_ALARM) return;
+  connect();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  armReconnectAlarm();
+  connect();
+});
+chrome.runtime.onInstalled.addListener(() => {
+  armReconnectAlarm();
+  connect();
+});
+armReconnectAlarm();
 connect();
