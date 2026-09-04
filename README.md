@@ -1,110 +1,186 @@
 # PC Tunes
 
-A macOS menu bar widget for YouTube Music. Shows the current track and provides
-play/pause, next and previous without leaving whatever app you are in. Pressing play
-with nothing open launches YouTube Music hidden and starts playing.
+A macOS menu bar widget for YouTube Music. Shows the current track with artwork and
+gives you play/pause, next/previous, like/dislike, seeking, volume, search and an
+up-next list without switching away from whatever app you're in.
+
+It needs a Chromium-based browser — Google Chrome is the one this has actually been
+tested against. See [Known limitations](#status-and-known-limitations) for what that
+means for Brave, Edge and Safari.
+
+## Why it exists
+
+Starting with macOS 15.4, Apple blocks third-party apps from reading "now playing"
+information through the private `MediaRemote` framework. That framework is how every
+prior generation of menu-bar music widgets worked, and on 15.4+ they simply stop
+getting data — there is no public replacement API.
+
+PC Tunes sidesteps the restriction by not using `MediaRemote` at all. Instead, a
+browser extension reads the playback state directly out of the YouTube Music page
+itself — the same information `MediaRemote` used to relay, read from the source it
+originally came from. This is also why the project needs a browser component in the
+first place, and why that component only knows about YouTube Music: it isn't reading
+system-level media state, it's reading one specific web page.
 
 ## How it works
 
-A Chrome MV3 extension reads playback state from the YouTube Music page and pushes it
-over a loopback WebSocket to a native Swift menu bar app. The app sends transport
-commands back over the same socket.
+Two processes, one loopback WebSocket:
 
-macOS 15.4 and later block the private MediaRemote framework for third-party apps, so
-reading "now playing" from the system is not possible — the state has to come from the
-page itself.
+- **The extension** (`extension/`) runs inside Chrome. `inject.js` executes in the
+  YouTube Music page's own JavaScript world so it can read `video.currentTime`,
+  `navigator.mediaSession.metadata` and the player bar's DOM directly, and click the
+  page's own buttons to control playback. `content.js` relays those messages to and
+  from `sw.js`, the background service worker, which owns the single WebSocket
+  connection out to the app.
+- **The app** (`app/`) is a native SwiftUI menu bar app. `WSServer`
+  (`app/Sources/PCTunesCore/WSServer.swift`) listens on `127.0.0.1`, decodes state
+  messages, and sends transport commands back over the same socket.
 
-When YouTube Music is open both as the installed Chrome PWA and as a regular tab, the
-PWA always wins.
+YouTube Music is normally installed as a Chromium "progressive web app" — its own
+window, its own Dock icon — but under the hood that's still a Chrome browser tab
+running the same extension content scripts. That means it's possible to have YouTube
+Music open twice at once: as the installed PWA and as an ordinary tab. When that
+happens, `SourceArbiter` (`app/Sources/PCTunesCore/SourceArbiter.swift`) always prefers
+the PWA; within a given kind, the most recently updated source wins, and a source that
+stops sending heartbeats is dropped after 15 seconds.
 
-## Requirements
+## Install
 
-- macOS 14 or later
-- Google Chrome
-- Swift toolchain (Command Line Tools is enough — full Xcode is not required)
+See [INSTALL.md](INSTALL.md) for step-by-step setup (English), or
+[INSTALL.th.md](INSTALL.th.md) for the Thai translation.
 
-## Build and install
+## Features
 
-```bash
-cd app && ./build.sh
-open "PC Tunes.app"
-```
+- Now-playing display with title, artist, album and artwork
+- Play/pause, next, previous
+- Like / dislike, reflecting the page's own rating state
+- A progress bar that can be dragged to seek
+- Volume control
+- An up-next list, fetched on demand when you expand it
+- In-menu search that plays the first result
+- Cold-start playback: press play with nothing open and PC Tunes launches YouTube
+  Music hidden and starts something playing
+- Launch at login
+- A settings window (menu bar title length, notifications, hotkeys)
+- Optional notifications when the track changes
+- Optional global hotkeys (⌃⌥Space play/pause, ⌃⌥→ next, ⌃⌥← previous) — registered
+  with Carbon's `RegisterEventHotKey`, which needs no Accessibility permission
+- An in-dropdown notice when the extension can't do something, most often because a
+  page selector no longer matches
 
-Then load the extension:
+See `docs/design/2026-09-04-feature-expansion.md` for the design notes behind the
+progress bar, settings, hotkeys, search and browser-fallback work.
 
-1. Open `chrome://extensions`
-2. Enable **Developer mode**
-3. Click **Load unpacked** and select the `extension/` directory
+## Status and known limitations
 
-Enable "Launch at login" from the widget's dropdown to have it start automatically.
+This is a working hobby project, built and used daily by its author, not a polished
+release. A few things are worth knowing before you install it:
 
-## Development
+- **The extension is unpacked, not from the Chrome Web Store.** Chrome will show a
+  "disable developer mode extensions" warning on browser restart, the extension's ID
+  changes every time you reload it unpacked, and there are no automatic updates. A
+  Web Store listing would fix all three; none has been done.
+- **The app is ad-hoc signed, not notarized.** You build it from source. A prebuilt
+  binary handed to someone else would be blocked by Gatekeeper.
+- **Everything the extension does depends on selectors into Google's markup**, which
+  can change without notice. When a selector breaks, the one control it drove stops
+  working, the page console gets a `console.warn`, and the app surfaces a notice in
+  the dropdown. The selectors themselves live in `extension/inject.js` as clearly
+  named constants (`CONTROL_SELECTORS`, `QUICK_PICK_SELECTORS`,
+  `SEARCH_RESULT_SELECTORS`, and so on) so fixing a break is a matter of updating one
+  constant, not reverse-engineering the file.
+- **Search and the up-next list are the least tested parts.** Their selectors have
+  not been verified against the live page the way the transport controls have.
+- **Chrome only, in practice.** Web app discovery itself is browser-agnostic — it
+  matches a Chromium web app bundle's `CrAppModeShortcutURL`, not anything
+  Chrome-specific — and the extension is plain Manifest V3 with nothing Chrome-only in
+  it, so it should load in Brave and Edge unchanged. Neither has actually been tried.
+  Safari is not supported: Safari extensions need full Xcode and a paid Apple
+  Developer account to distribute, which is a lot of cost for a small audience.
 
-```bash
-cd app && swift run PCTunesTests   # run the test suite
-cd app && swift build              # build without bundling
-```
+## Security
 
-The project has no third-party dependencies. Tests use a small hand-rolled harness in
-`Sources/PCTunesTests/TestKit.swift` because neither XCTest nor swift-testing ships with
-the Command Line Tools.
+The WebSocket between the extension and the app carries no authentication. Concretely:
+
+- The server binds `127.0.0.1` only — it is never reachable from another machine.
+- On accepting a connection it sends a fixed greeting,
+  `{"type":"hello","app":"PC Tunes"}`, so the extension can distinguish "this is PC
+  Tunes" from some other process that happens to be listening on the same port. That
+  greeting is not a secret — it's a literal string in `WSServer.swift`, published in
+  this very repository — so it proves the app's identity to a casual squatter, not to
+  someone who has actually read the source.
+- Anything else running as your user that binds one of ports 8787-8791 first, and
+  replies with that same greeting, can impersonate PC Tunes to the extension: it would
+  receive the extension's playback feed and could send it fabricated transport
+  commands.
+- Symmetrically, the app accepts a connection from any local process and decodes
+  whatever "state" messages it sends with no verification that they actually came from
+  the extension — a local process could put arbitrary text in your menu bar or claim
+  you're listening to something you aren't.
+
+In short: on a single-user Mac where you trust everything already running as you, this
+is a reasonable design — it needs no setup and no secret to manage. On a shared or
+multi-user machine, or if you routinely run untrusted local code, treat the socket as
+unauthenticated, because it is. A per-run shared secret was considered and rejected:
+the extension is loaded unpacked with no build step to inject one, so the secret would
+either have to be hardcoded (defeating the point) or entered by hand on every restart,
+which isn't a workable model for an unpacked-extension project. Shipping the current
+design without saying so plainly would not have been.
 
 ## Troubleshooting
 
-**The menu bar shows `♪` with no text while music is playing.** Open the service worker
-console from `chrome://extensions` and look for `[PC Tunes] connected on port 8787`. If
-it is absent, the app is not running or every port in 8787-8791 is occupied. A
-`[PC Tunes] no greeting on port X — not our server` line means something else is
-listening on that port; the extension will keep scanning the rest of the range.
+There are three separate places PC Tunes logs to, and depending on the symptom you'll
+need one specific one:
 
-**Next and previous stop working after a YouTube Music update.** The button selectors in
-`extension/inject.js` (`CONTROL_SELECTORS`) need updating against the current DOM.
+1. **The page console**, because `inject.js` runs inside the YouTube Music page
+   itself (`"world": "MAIN"` in `extension/manifest.json`). Open DevTools on the
+   YouTube Music tab or app window and look at its Console. This is where a broken
+   page selector shows up — `console.warn` lines about a control or the queue not
+   being found, right before the matching notice appears in the app's dropdown.
+2. **The service worker console**, at `chrome://extensions` → PC Tunes Bridge →
+   "service worker" (click it to open its own DevTools). This is where `sw.js` logs
+   connection state: `[PC Tunes] connected on port 8787`, or
+   `[PC Tunes] no greeting on port 8787 — not our server` if something else is
+   squatting on that port. If the dropdown says "Extension not connected", this is
+   where to look first.
+3. **Console.app**, because the Swift app logs through `NSLog`. Filter for `PC Tunes`
+   or `PCTunes`. This is where you'll see port-binding failures (`could not bind a
+   port in 8787-8791`), login-item registration errors, and hotkey registration
+   failures.
 
-## Verification status
+If nothing shows up in the menu bar at all, the app likely never launched or exited
+immediately — check Console.app for a crash, and confirm `./build.sh` actually
+completed (see [INSTALL.md](INSTALL.md)).
 
-The following have been verified automatically on this machine and are confirmed
-working:
+If the buttons visibly exist but don't do anything, the extension is probably
+connected but a selector is stale — check the page console and the dropdown's notice
+banner, then see "Known limitations" above.
 
-- `swift run PCTunesTests` passes: `✅ 55 checks passed`, exit code 0.
-- `./build.sh` produces a clean release build and an ad-hoc-signed `PC Tunes.app`
-  bundle using `swift build` alone (no Xcode required — this machine only has the
-  Command Line Tools, and `xcodebuild` is not available).
-- `extension/manifest.json` parses as valid JSON, and `content.js`, `inject.js`, and
-  `sw.js` all pass `node --check` (no syntax errors).
-- The built app launches, binds a loopback listener (confirmed with `lsof`, e.g.
-  `TCP localhost:8787 (LISTEN)`), and quits cleanly, releasing the port.
-- With the extension loaded, Chrome's service worker connects to the app — confirmed
-  with `lsof` showing an ESTABLISHED pair between Google Chrome and PCTunes on
-  `127.0.0.1:8787`.
+## Contributing
 
-The rest requires a human at the keyboard — playing tracks, opening and closing
-Chrome windows, and rebooting are not things an automated agent can do. The first
-three items below are confirmed working against the real YouTube Music PWA, which
-also confirms the transport selectors in `extension/inject.js` match the current
-DOM. The remainder are still open:
+This is a small, single-maintainer hobby project — issues and pull requests are
+welcome, especially:
 
-- [x] Open the YouTube Music PWA and play a track. Title and artist appear in the menu
-      bar within 5s.
-- [x] Click ⏯ in the dropdown. Playback toggles; the icon in the dropdown flips within
-      1s.
-- [x] Click ⏭, then ⏮. The track changes and the menu bar text follows.
-- [ ] Also open `https://music.youtube.com` in a regular Chrome tab and play something
-      there. The menu bar still shows the PWA's track, and the transport buttons still
-      control the PWA.
-- [ ] Close the PWA window. Within 15s the widget switches to the regular tab's track.
-- [ ] Close the regular tab too. The menu bar shows the bare `♪` icon and "Not
-      playing"; transport buttons are disabled.
-- [ ] Click "Open YouTube Music" with nothing open. The PWA launches.
-- [ ] With music playing, quit and relaunch `PC Tunes.app`. A relaunch onto the same
-      port reconnects within a few seconds without touching Chrome; a relaunch onto a
-      different port can take up to a full pass of the port range.
-- [ ] Enable "Launch at login", reboot. The icon returns after login. Then disable it
-      again if unwanted.
-- [ ] Pause playback, leave YouTube Music in the background for six minutes, then check the menu bar still shows the track and the play button still works.
-- [ ] Squat on port 8787 with a WebSocket server that completes the handshake and then
-      says nothing, restart the app so it takes 8788, and confirm the widget still
-      connects. The service worker console should log
-      `[PC Tunes] no greeting on port 8787 — not our server` and then connect on 8788.
-- [ ] With YouTube Music closed entirely, click ⏯ in the dropdown. Playback begins and
-      the PWA does *not* come to the front — its icon appears in the Dock with no window
-      shown. Then click "Open YouTube Music" and confirm the window does come forward.
+- Confirming the extension actually works, unmodified, in Brave or Edge
+- Verifying and fixing the search and up-next selectors against the live page
+- Fixing a selector in `extension/inject.js` after a YouTube Music markup change
+
+The test suite is a small hand-rolled harness (`app/Sources/PCTunesTests/TestKit.swift`)
+because this project has no Xcode project file and is built with the Swift toolchain
+that ships with the Command Line Tools alone, which includes neither XCTest nor
+swift-testing. Run it with:
+
+```bash
+cd app && swift run PCTunesTests
+```
+
+## Licence
+
+MIT — see [LICENSE](LICENSE).
+
+## Trademark disclaimer
+
+PC Tunes is an unofficial, third-party project. It is not affiliated with, endorsed
+by, or sponsored by Google or YouTube. YouTube and YouTube Music are trademarks of
+Google LLC. This project ships none of Google's artwork; the menu bar icon is drawn
+programmatically in `app/Sources/PCTunes/MenuBarIcon.swift`.
