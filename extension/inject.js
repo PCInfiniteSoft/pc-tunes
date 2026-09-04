@@ -46,6 +46,38 @@
     document.querySelector("ytmusic-player-bar");
   const videoEl = () => document.querySelector("video");
 
+  /// YouTube's own player object, which YouTube Music embeds and drives.
+  ///
+  /// It is the only source of per-track timing on this page. YouTube Music streams a
+  /// whole queue through a single MediaSource, so the `<video>` element's `currentTime`
+  /// and `duration` are the totals for the listening session, not for the song: after
+  /// two tracks a 3:42 song reads as "10:28 / 11:55". The player object reports the
+  /// current track — verified against `watch?v=6uxTE0h6w94`, where `getDuration()`
+  /// returned 293 for a track that is 4:53 long.
+  const moviePlayer = () => document.getElementById("movie_player");
+
+  /// Position and duration of the track playing now, both in seconds.
+  ///
+  /// Falls back to the video element when the player object is not up yet — during a
+  /// page load it briefly is not. The fallback is wrong in exactly the way described
+  /// above once a second track has played, but it is only ever reached before the first
+  /// one has finished, when the two agree.
+  function readTiming(video) {
+    const player = moviePlayer();
+    if (player && typeof player.getDuration === "function"
+        && typeof player.getCurrentTime === "function") {
+      const duration = player.getDuration();
+      const position = player.getCurrentTime();
+      if (Number.isFinite(duration) && duration > 0 && Number.isFinite(position)) {
+        return { position, duration };
+      }
+    }
+    return {
+      position: video.currentTime || 0,
+      duration: Number.isFinite(video.duration) ? video.duration : 0,
+    };
+  }
+
   /// The first playable item on the page.
   ///
   /// A song links to `watch?v=`; an artist links to `channel/` and an album to
@@ -141,14 +173,15 @@
     const artworkList = metadata.artwork || [];
     const artwork = artworkList.length ? artworkList[artworkList.length - 1].src : null;
 
+    const timing = readTiming(video);
     const state = {
       playing: !video.paused,
       title: metadata.title || "",
       artist: metadata.artist || "",
       album: metadata.album || "",
       artwork,
-      position: video.currentTime || 0,
-      duration: Number.isFinite(video.duration) ? video.duration : 0,
+      position: timing.position,
+      duration: timing.duration,
       volume: Number.isFinite(video.volume) ? video.volume : 1,
     };
     const liked = readLiked();
@@ -304,8 +337,17 @@
         return;
       }
       if (typeof data.value !== "number") return;
-      const duration = Number.isFinite(video.duration) ? video.duration : 0;
-      video.currentTime = Math.min(Math.max(0, data.value), duration);
+      // Seek through the player, on the same clock the position was reported on.
+      // Writing `video.currentTime` would land at that offset into the whole session:
+      // once a second track has played, dragging to 1:00 jumps back into the first.
+      const timing = readTiming(video);
+      const target = Math.min(Math.max(0, data.value), timing.duration || 0);
+      const player = moviePlayer();
+      if (player && typeof player.seekTo === "function") {
+        player.seekTo(target, true);
+      } else {
+        video.currentTime = target;
+      }
       // Push immediately, not after the usual settle delay, so the app's local
       // interpolation resyncs to the new position right away.
       push(true);
