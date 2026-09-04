@@ -5,6 +5,16 @@
     if (event.source !== window) return;
     const data = event.data;
     if (!data || data.__pcTunes !== true || data.dir !== "out") return;
+
+    if (data.kind === "notice") {
+      chrome.runtime.sendMessage({ kind: "notice", text: data.text }).catch(() => {});
+      return;
+    }
+    if (data.kind === "queue") {
+      chrome.runtime.sendMessage({ kind: "queue", items: data.items }).catch(() => {});
+      return;
+    }
+
     chrome.runtime.sendMessage({ kind: "state", payload: data.payload }).catch(() => {
       // The service worker restarts on its own; a dropped message is replaced by
       // the next heartbeat.
@@ -19,7 +29,10 @@
       return;
     }
     if (message.kind === "cmd") {
-      window.postMessage({ __pcTunes: true, dir: "in", action: message.action }, "*");
+      window.postMessage(
+        { __pcTunes: true, dir: "in", action: message.action, value: message.value, text: message.text },
+        "*"
+      );
     }
   });
 

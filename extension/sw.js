@@ -175,7 +175,12 @@ function connect() {
     }
 
     chrome.tabs
-      .sendMessage(message.tabId, { kind: "cmd", action: message.action })
+      .sendMessage(message.tabId, {
+        kind: "cmd",
+        action: message.action,
+        value: message.value,
+        text: message.text,
+      })
       .catch(() => {});
   };
 
@@ -199,7 +204,7 @@ function connect() {
 /// overwrite `type`, `tabId` or `source` and lie about which window it came from.
 function stateMessage(tabId, source, payload) {
   const state = payload || {};
-  return {
+  const message = {
     type: "state",
     tabId,
     source,
@@ -210,6 +215,47 @@ function stateMessage(tabId, source, payload) {
     artwork: typeof state.artwork === "string" ? state.artwork : null,
     position: typeof state.position === "number" ? state.position : 0,
     duration: typeof state.duration === "number" ? state.duration : 0,
+  };
+  // Omitted rather than defaulted: the app's decoder treats absence as "unknown" and
+  // rejects any `liked` value it does not recognize, so a bad or missing rating from
+  // the page must disappear rather than turn into a guess.
+  if (state.liked === "like" || state.liked === "dislike") {
+    message.liked = state.liked;
+  }
+  if (typeof state.volume === "number") {
+    message.volume = state.volume;
+  }
+  return message;
+}
+
+const QUEUE_MAX = 20;
+
+/// Builds a notice message field by field, for the same reason as `stateMessage`:
+/// `inject.js` runs in the page's own world, so anything on the page can shape what it
+/// sends, and a spread would let it overwrite `type` or `tabId`.
+function noticeMessage(tabId, text) {
+  return {
+    type: "notice",
+    tabId,
+    text: typeof text === "string" ? text : "",
+  };
+}
+
+/// Builds a queue message field by field, same reasoning as `stateMessage` and
+/// `noticeMessage`. Caps at QUEUE_MAX and coerces each entry to a {title, artist}
+/// string pair, dropping anything the page didn't actually provide as a string.
+function queueMessage(tabId, items) {
+  const list = Array.isArray(items) ? items : [];
+  return {
+    type: "queue",
+    tabId,
+    items: list.slice(0, QUEUE_MAX).map((item) => {
+      const entry = item || {};
+      return {
+        title: typeof entry.title === "string" ? entry.title : "",
+        artist: typeof entry.artist === "string" ? entry.artist : "",
+      };
+    }),
   };
 }
 
@@ -225,6 +271,16 @@ chrome.runtime.onMessage.addListener((message, sender) => {
       pendingStartAt = 0;
       startPlaybackIn(tabId);
     }
+    return;
+  }
+
+  if (message.kind === "notice") {
+    sendToApp(noticeMessage(tabId, message.text));
+    return;
+  }
+
+  if (message.kind === "queue") {
+    sendToApp(queueMessage(tabId, message.items));
     return;
   }
 
