@@ -141,7 +141,6 @@ public struct OutboundCommand: Encodable, Equatable, Sendable {
         case dislike
         case seek
         case volume
-        case search
         case requestQueue
     }
 
@@ -150,14 +149,11 @@ public struct OutboundCommand: Encodable, Equatable, Sendable {
     public let tabId: Int
     /// Seek target in seconds, or volume from 0 to 1. Omitted when the action needs no number.
     public let value: Double?
-    /// A search query. Omitted for every other action.
-    public let text: String?
 
-    public init(action: Action, tabId: Int, value: Double? = nil, text: String? = nil) {
+    public init(action: Action, tabId: Int, value: Double? = nil) {
         self.action = action
         self.tabId = tabId
         self.value = value
-        self.text = text
     }
 
     public func encoded() -> Data {

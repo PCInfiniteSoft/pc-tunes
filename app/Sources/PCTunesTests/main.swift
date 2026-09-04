@@ -153,12 +153,6 @@ func runProtocolTests() {
     expectEqual(seekEncoded["value"] as? Double, 91.5, "seek command value")
     expectNil(seekEncoded["text"], "seek command omits text key entirely")
 
-    // search encodes the query intact and omits value.
-    let searchCmd = OutboundCommand(action: .search, tabId: 7, text: "ครึ่งหนึ่ง")
-    let searchEncoded = try! JSONSerialization.jsonObject(with: searchCmd.encoded()) as! [String: Any]
-    expectEqual(searchEncoded["action"] as? String, "search", "search command action")
-    expectEqual(searchEncoded["text"] as? String, "ครึ่งหนึ่ง", "search command text intact")
-    expectNil(searchEncoded["value"], "search command omits value key entirely")
 }
 
 func runArbiterTests() {

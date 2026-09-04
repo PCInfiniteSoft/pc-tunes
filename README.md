@@ -1,7 +1,7 @@
 # PC Tunes
 
 A macOS menu bar widget for YouTube Music. Shows the current track with artwork and
-gives you play/pause, next/previous, like/dislike, seeking, volume, search and an
+gives you play/pause, next/previous, like/dislike, seeking, volume and an
 up-next list without switching away from whatever app you're in.
 
 It needs a Chromium-based browser — Google Chrome is the one this has actually been
@@ -57,7 +57,6 @@ See [INSTALL.md](INSTALL.md) for step-by-step setup (English), or
 - A progress bar that can be dragged to seek
 - Volume control
 - An up-next list, fetched on demand when you expand it
-- In-menu search that plays the first result
 - Cold-start playback: press play with nothing open and PC Tunes launches YouTube
   Music hidden — it stays in the Dock, never taking the screen — and starts playing
 - Launch at login
@@ -70,12 +69,18 @@ See [INSTALL.md](INSTALL.md) for step-by-step setup (English), or
   page selector no longer matches
 
 See `docs/design/2026-09-04-feature-expansion.md` for the design notes behind the
-progress bar, settings, hotkeys, search and browser-fallback work.
+progress bar, settings, hotkeys and browser-fallback work. (In-menu search is
+described there too, but was dropped before release — see below.)
 
 ## Status and known limitations
 
 This is a working hobby project, built and used daily by its author, not a polished
 release. A few things are worth knowing before you install it:
+
+- **There is no search.** It was built and then taken out again before release. It
+  worked, but only by navigating the page to a results URL and playing the first
+  result, which stops whatever is playing and offers no way to choose anything else —
+  a worse deal than switching to the window and typing there.
 
 - **The extension is unpacked, not from the Chrome Web Store.** Chrome will show a
   "disable developer mode extensions" warning on browser restart, the extension's ID

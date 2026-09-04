@@ -1,7 +1,7 @@
 # Feature expansion design
 
 **Date:** 2026-09-04
-**Status:** approved, in progress
+**Status:** shipped, except for search — see below
 
 Nine features requested together. They share one protocol revision, one settings store
 and one dropdown, so they are designed as a set rather than nine separate additions.
@@ -105,7 +105,13 @@ A combination another app already owns is reported per binding rather than turni
 whole feature off: the other two still work, and the settings window says which one is
 dead instead of leaving it to be discovered by pressing keys and getting nothing.
 
-## Search
+## Search — dropped before release
+
+*Built, then removed. What follows is the design as it was implemented. It navigated
+the page away from whatever was playing and then played the first result with no way
+to pick another, which is a worse deal than switching to the window and typing there.
+The `search` command and its `text` payload are gone from the protocol with it.*
+
 
 `search` navigates the page to `https://music.youtube.com/search?q=<query>` and then
 plays the first song result, reusing the polling approach the cold-start path already

@@ -6,7 +6,6 @@ struct MenuContent: View {
 
     @Environment(\.openSettings) private var openSettings
 
-    @State private var searchQuery = ""
     @State private var isUpNextExpanded = false
 
     /// Small enough that the two of them stack within the height of the track's own
@@ -28,7 +27,6 @@ struct MenuContent: View {
             Divider()
 
             volume
-            searchField
             upNext
             noticeBanner
 
@@ -188,15 +186,6 @@ struct MenuContent: View {
                     .foregroundStyle(.secondary)
             }
         }
-    }
-
-    private var searchField: some View {
-        TextField("Search YouTube Music", text: $searchQuery)
-            .disabled(!model.extensionConnected)
-            .onSubmit {
-                model.search(searchQuery)
-                searchQuery = ""
-            }
     }
 
     @ViewBuilder

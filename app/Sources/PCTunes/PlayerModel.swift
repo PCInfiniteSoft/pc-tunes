@@ -158,15 +158,6 @@ final class PlayerModel: ObservableObject {
         dispatch(OutboundCommand(action: .volume, tabId: tabId, value: min(1, max(0, level))))
     }
 
-    /// No-op on an empty or whitespace-only query, so an accidental blank submit does
-    /// not send the extension off navigating for nothing.
-    func search(_ query: String) {
-        guard let tabId = activeTabId else { return }
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else { return }
-        dispatch(OutboundCommand(action: .search, tabId: tabId, text: trimmed))
-    }
-
     func refreshQueue() {
         guard let tabId = activeTabId else { return }
         dispatch(OutboundCommand(action: .requestQueue, tabId: tabId))
