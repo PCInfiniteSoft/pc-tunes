@@ -87,6 +87,19 @@ func runProtocolTests() {
     }
     expectNil(unrated.liked, "state liked absent stays nil")
     expectNil(unrated.volume, "state volume absent stays nil")
+    expectNil(unrated.position, "state position absent stays nil, not zero")
+
+    // An explicit zero position is preserved — distinct from an absent one, which is
+    // what the keepalive re-send relies on to mean "unknown" rather than "just started".
+    let zeroPositionJSON = """
+    {"type":"state","tabId":42,"source":"app","title":"Kalapapruek","position":0}
+    """.data(using: .utf8)!
+    guard case .state(_, _, let zeroPosition)? = try? MessageDecoder.decode(zeroPositionJSON) else {
+        failures.append("FAIL decode zero-position state — did not produce a .state message")
+        checkCount += 1
+        return
+    }
+    expectEqual(zeroPosition.position, 0, "state position explicit zero is preserved, not treated as absent")
 
     // An invalid liked value fails the whole message rather than silently dropping it.
     let badLikedJSON = """
@@ -226,6 +239,19 @@ func runMenuBarTitleTests() {
         "…",
         "a zero limit degrades instead of trapping"
     )
+}
+
+func runMenuBarTitleLengthClampTests() {
+    expectEqual(MenuBarTitle.clampLength(35), 35, "a value already in range is untouched")
+    expectEqual(MenuBarTitle.clampLength(10), 10, "the minimum bound is kept as-is")
+    expectEqual(MenuBarTitle.clampLength(80), 80, "the maximum bound is kept as-is")
+    expectEqual(MenuBarTitle.clampLength(1), 10, "a value below range clamps up to the minimum")
+    expectEqual(MenuBarTitle.clampLength(999), 80, "a value above range clamps down to the maximum")
+    expectEqual(
+        MenuBarTitle.clampLength(0), 10,
+        "UserDefaults' zero-for-unset value clamps up rather than collapsing the title"
+    )
+    expectEqual(MenuBarTitle.clampLength(-5), 10, "a negative value clamps up to the minimum")
 }
 
 func runWebAppTests() {
@@ -507,6 +533,7 @@ runMessageTests()
 runProtocolTests()
 runArbiterTests()
 runMenuBarTitleTests()
+runMenuBarTitleLengthClampTests()
 runWebAppTests()
 runServerTests()
 runServerResilienceTests()

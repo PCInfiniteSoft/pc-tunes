@@ -29,17 +29,18 @@ enum YouTubeMusicLauncher {
             )
             return
         }
-        guard
-            let chrome = NSWorkspace.shared.urlForApplication(withBundleIdentifier: "com.google.Chrome"),
-            let url = URL(string: "https://\(host)")
-        else {
-            NSLog("[PC Tunes] no YouTube Music web app and no Google Chrome to fall back to")
+        // No installed web app — hand the URL to whatever the user has set as their
+        // default browser, rather than assuming Chrome. A Brave or Edge user with no
+        // web app installed otherwise gets nothing.
+        guard let url = URL(string: "https://\(host)") else {
+            NSLog("[PC Tunes] could not build a URL for \(host)")
             return
         }
-        NSWorkspace.shared.open(
-            [url], withApplicationAt: chrome,
-            configuration: configuration
-        )
+        NSWorkspace.shared.open(url, configuration: configuration) { _, error in
+            if let error {
+                NSLog("[PC Tunes] could not open \(url) with the default browser: \(error)")
+            }
+        }
     }
 
     /// Every `.app` directly inside `~/Applications` or one level below it, paired with

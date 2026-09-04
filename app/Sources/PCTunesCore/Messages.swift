@@ -20,14 +20,17 @@ public struct TrackState: Equatable, Sendable {
     public var artist: String
     public var album: String
     public var artwork: URL?
-    public var position: Double
+    /// Seconds into the track, or `nil` when the extension's keepalive re-send omitted
+    /// it. Absent means unknown, not zero — a stale position resent alongside fresh
+    /// ones would otherwise make a progress bar jump backwards.
+    public var position: Double?
     public var duration: Double
     public var liked: LikeState?
     public var volume: Double?
 
     public init(
         playing: Bool, title: String, artist: String, album: String,
-        artwork: URL?, position: Double, duration: Double,
+        artwork: URL?, position: Double? = nil, duration: Double,
         liked: LikeState? = nil, volume: Double? = nil
     ) {
         self.playing = playing
@@ -104,7 +107,7 @@ public enum MessageDecoder {
                 artist: raw.artist ?? "",
                 album: raw.album ?? "",
                 artwork: raw.artwork.flatMap(URL.init(string:)),
-                position: raw.position ?? 0,
+                position: raw.position,
                 duration: raw.duration ?? 0,
                 liked: raw.liked,
                 volume: raw.volume
