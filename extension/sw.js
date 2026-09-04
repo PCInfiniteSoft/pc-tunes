@@ -6,7 +6,7 @@ const BACKOFF_MS = [1000, 2000, 4000, 8000, 30000];
 // backgrounded page's timers to once a minute, so the page's own heartbeat cannot
 // be relied on — the worker's can.
 const KEEPALIVE_MS = 5000;
-const HELLO_TIMEOUT_MS = 2000;
+const HELLO_TIMEOUT_MS = 3000;
 const PENDING_START_MS = 30000;
 
 let socket = null;
@@ -124,17 +124,15 @@ function connect() {
   }
   socket = ws;
 
-  ws.onopen = () => {
-    if (ws !== socket) return;
-    // A socket that opens proves only that something is listening. Wait for the
-    // app's greeting before treating this port as ours.
-    clearTimeout(helloTimer);
-    helloTimer = setTimeout(() => {
-      console.warn(`[PC Tunes] no greeting on port ${port} — not our server`);
-      verifiedPort = null;
-      ws.close();
-    }, HELLO_TIMEOUT_MS);
-  };
+  // Armed here rather than in `onopen` so it also covers a peer that accepts the TCP
+  // connection but never completes the WebSocket upgrade — that never fires `onopen`,
+  // and without a deadline the reconnect loop stalls forever on CONNECTING.
+  clearTimeout(helloTimer);
+  helloTimer = setTimeout(() => {
+    console.warn(`[PC Tunes] no greeting on port ${port} — not our server`);
+    verifiedPort = null;
+    ws.close();
+  }, HELLO_TIMEOUT_MS);
 
   ws.onmessage = async (event) => {
     if (ws !== socket) return;
@@ -194,6 +192,27 @@ function connect() {
   };
 }
 
+/// Builds a state message from a page-supplied payload.
+///
+/// The fields are copied one by one rather than spread: `inject.js` runs in the page's
+/// own world, so anything on the page can shape that payload, and a spread would let it
+/// overwrite `type`, `tabId` or `source` and lie about which window it came from.
+function stateMessage(tabId, source, payload) {
+  const state = payload || {};
+  return {
+    type: "state",
+    tabId,
+    source,
+    playing: state.playing === true,
+    title: typeof state.title === "string" ? state.title : "",
+    artist: typeof state.artist === "string" ? state.artist : "",
+    album: typeof state.album === "string" ? state.album : "",
+    artwork: typeof state.artwork === "string" ? state.artwork : null,
+    position: typeof state.position === "number" ? state.position : 0,
+    duration: typeof state.duration === "number" ? state.duration : 0,
+  };
+}
+
 chrome.runtime.onMessage.addListener((message, sender) => {
   if (!message) return;
   const tabId = sender.tab && sender.tab.id;
@@ -215,7 +234,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
   // from one tab must not overtake each other on the way to the app.
   const known = knownTabs.get(tabId);
   if (known) {
-    const state = { type: "state", tabId, source: known, ...message.payload };
+    const state = stateMessage(tabId, known, message.payload);
     lastState.set(tabId, state);
     sendToApp(state);
     return;
@@ -223,7 +242,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 
   windowKindFor(tabId).then((source) => {
     knownTabs.set(tabId, source);
-    const state = { type: "state", tabId, source, ...message.payload };
+    const state = stateMessage(tabId, source, message.payload);
     lastState.set(tabId, state);
     sendToApp(state);
   });
