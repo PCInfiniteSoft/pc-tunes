@@ -101,6 +101,12 @@ You should see "PC Tunes Bridge" appear in the extension list.
 
 ## If it didn't work
 
+**The dropdown says "Not playing" right after you reloaded the extension.**
+Reloading an extension tears its content scripts out of pages that were already open,
+so a YouTube Music window that was running before the reload stops reporting anything
+even though the extension itself reconnects. Reload that window (or close it and press
+play in the dropdown) and it comes back.
+
 **The dropdown says "Extension not connected."**
 The app is running but no browser has attached to it yet. Reload the YouTube Music
 tab (the extension only starts a connection once its content script runs on a
