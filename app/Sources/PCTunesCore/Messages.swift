@@ -7,6 +7,12 @@ public enum SourceKind: String, Codable, Equatable, Sendable {
     case tab
 }
 
+/// The listener's rating of the current track, as YouTube Music reports it.
+public enum LikeState: String, Codable, Equatable, Sendable {
+    case like
+    case dislike
+}
+
 /// A snapshot of what YouTube Music is playing.
 public struct TrackState: Equatable, Sendable {
     public var playing: Bool
@@ -16,10 +22,13 @@ public struct TrackState: Equatable, Sendable {
     public var artwork: URL?
     public var position: Double
     public var duration: Double
+    public var liked: LikeState?
+    public var volume: Double?
 
     public init(
         playing: Bool, title: String, artist: String, album: String,
-        artwork: URL?, position: Double, duration: Double
+        artwork: URL?, position: Double, duration: Double,
+        liked: LikeState? = nil, volume: Double? = nil
     ) {
         self.playing = playing
         self.title = title
@@ -28,13 +37,32 @@ public struct TrackState: Equatable, Sendable {
         self.artwork = artwork
         self.position = position
         self.duration = duration
+        self.liked = liked
+        self.volume = volume
     }
 }
 
-/// The only two message types the app accepts from the extension.
+/// One entry in the up-next list.
+public struct QueueItem: Decodable, Equatable, Sendable {
+    public let title: String
+    public let artist: String
+
+    public init(title: String, artist: String) {
+        self.title = title
+        self.artist = artist
+    }
+}
+
+/// The message types the app accepts from the extension.
 public enum InboundMessage: Equatable, Sendable {
     case state(tabId: Int, source: SourceKind, track: TrackState)
     case gone(tabId: Int)
+    /// The extension could not do something — most often a page selector that no
+    /// longer matches. Surfaced in the dropdown, because a console warning is not a
+    /// place any user will look.
+    case notice(tabId: Int, text: String)
+    /// The up-next list, sent only in reply to `requestQueue`.
+    case queue(tabId: Int, items: [QueueItem])
 }
 
 public enum MessageDecodeError: Error, Equatable {
@@ -55,6 +83,10 @@ public enum MessageDecoder {
         let artwork: String?
         let position: Double?
         let duration: Double?
+        let liked: LikeState?
+        let volume: Double?
+        let text: String?
+        let items: [QueueItem]?
     }
 
     public static func decode(_ data: Data) throws -> InboundMessage {
@@ -73,12 +105,21 @@ public enum MessageDecoder {
                 album: raw.album ?? "",
                 artwork: raw.artwork.flatMap(URL.init(string:)),
                 position: raw.position ?? 0,
-                duration: raw.duration ?? 0
+                duration: raw.duration ?? 0,
+                liked: raw.liked,
+                volume: raw.volume
             )
             return .state(tabId: tabId, source: source, track: track)
         case "gone":
             guard let tabId = raw.tabId else { throw MessageDecodeError.missingField("tabId") }
             return .gone(tabId: tabId)
+        case "notice":
+            guard let tabId = raw.tabId else { throw MessageDecodeError.missingField("tabId") }
+            guard let text = raw.text else { throw MessageDecodeError.missingField("text") }
+            return .notice(tabId: tabId, text: text)
+        case "queue":
+            guard let tabId = raw.tabId else { throw MessageDecodeError.missingField("tabId") }
+            return .queue(tabId: tabId, items: raw.items ?? [])
         default:
             throw MessageDecodeError.unknownType(raw.type)
         }
@@ -93,15 +134,27 @@ public struct OutboundCommand: Encodable, Equatable, Sendable {
         case prev
         case focusTab
         case startPlayback
+        case like
+        case dislike
+        case seek
+        case volume
+        case search
+        case requestQueue
     }
 
     public let type = "cmd"
     public let action: Action
     public let tabId: Int
+    /// Seek target in seconds, or volume from 0 to 1. Omitted when the action needs no number.
+    public let value: Double?
+    /// A search query. Omitted for every other action.
+    public let text: String?
 
-    public init(action: Action, tabId: Int) {
+    public init(action: Action, tabId: Int, value: Double? = nil, text: String? = nil) {
         self.action = action
         self.tabId = tabId
+        self.value = value
+        self.text = text
     }
 
     public func encoded() -> Data {

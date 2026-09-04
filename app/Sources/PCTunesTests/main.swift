@@ -62,6 +62,92 @@ func runMessageTests() {
     expectEqual(coldEncoded["tabId"] as? Int, -1, "cold-start command carries the no-tab sentinel")
 }
 
+func runProtocolTests() {
+    // A state message carrying liked and volume decodes both.
+    let ratedJSON = """
+    {"type":"state","tabId":42,"source":"app","title":"Kalapapruek",
+     "liked":"dislike","volume":0.25}
+    """.data(using: .utf8)!
+    guard case .state(_, _, let rated)? = try? MessageDecoder.decode(ratedJSON) else {
+        failures.append("FAIL decode rated state — did not produce a .state message")
+        checkCount += 1
+        return
+    }
+    expectEqual(rated.liked, .dislike, "state liked decodes")
+    expectEqual(rated.volume, 0.25, "state volume decodes")
+
+    // A state message with neither leaves both nil — absence is meaningful, not a default.
+    let unratedJSON = """
+    {"type":"state","tabId":42,"source":"app","title":"Kalapapruek"}
+    """.data(using: .utf8)!
+    guard case .state(_, _, let unrated)? = try? MessageDecoder.decode(unratedJSON) else {
+        failures.append("FAIL decode unrated state — did not produce a .state message")
+        checkCount += 1
+        return
+    }
+    expectNil(unrated.liked, "state liked absent stays nil")
+    expectNil(unrated.volume, "state volume absent stays nil")
+
+    // An invalid liked value fails the whole message rather than silently dropping it.
+    let badLikedJSON = """
+    {"type":"state","tabId":42,"source":"app","title":"Kalapapruek","liked":"meh"}
+    """.data(using: .utf8)!
+    expectNil(try? MessageDecoder.decode(badLikedJSON), "invalid liked value rejects the message")
+
+    // notice decodes its tabId and text.
+    let noticeJSON = """
+    {"type":"notice","tabId":42,"text":"Next and previous are unavailable"}
+    """.data(using: .utf8)!
+    expectEqual(
+        try? MessageDecoder.decode(noticeJSON),
+        InboundMessage.notice(tabId: 42, text: "Next and previous are unavailable"),
+        "decode notice"
+    )
+
+    // A notice with no text is rejected.
+    let noTextNoticeJSON = #"{"type":"notice","tabId":42}"#.data(using: .utf8)!
+    expectNil(try? MessageDecoder.decode(noTextNoticeJSON), "notice without text rejected")
+
+    // queue decodes two items in order.
+    let queueJSON = """
+    {"type":"queue","tabId":42,"items":[
+        {"title":"Song A","artist":"Artist A"},
+        {"title":"Song B","artist":"Artist B"}
+    ]}
+    """.data(using: .utf8)!
+    expectEqual(
+        try? MessageDecoder.decode(queueJSON),
+        InboundMessage.queue(tabId: 42, items: [
+            QueueItem(title: "Song A", artist: "Artist A"),
+            QueueItem(title: "Song B", artist: "Artist B"),
+        ]),
+        "decode queue with two items in order"
+    )
+
+    // A queue with no items key decodes as empty.
+    let emptyQueueJSON = #"{"type":"queue","tabId":42}"#.data(using: .utf8)!
+    expectEqual(
+        try? MessageDecoder.decode(emptyQueueJSON),
+        InboundMessage.queue(tabId: 42, items: []),
+        "queue without items key decodes as empty"
+    )
+
+    // seek encodes action, tabId and value, and omits text entirely.
+    let seekCmd = OutboundCommand(action: .seek, tabId: 7, value: 91.5)
+    let seekEncoded = try! JSONSerialization.jsonObject(with: seekCmd.encoded()) as! [String: Any]
+    expectEqual(seekEncoded["action"] as? String, "seek", "seek command action")
+    expectEqual(seekEncoded["tabId"] as? Int, 7, "seek command tabId")
+    expectEqual(seekEncoded["value"] as? Double, 91.5, "seek command value")
+    expectNil(seekEncoded["text"], "seek command omits text key entirely")
+
+    // search encodes the query intact and omits value.
+    let searchCmd = OutboundCommand(action: .search, tabId: 7, text: "ครึ่งหนึ่ง")
+    let searchEncoded = try! JSONSerialization.jsonObject(with: searchCmd.encoded()) as! [String: Any]
+    expectEqual(searchEncoded["action"] as? String, "search", "search command action")
+    expectEqual(searchEncoded["text"] as? String, "ครึ่งหนึ่ง", "search command text intact")
+    expectNil(searchEncoded["value"], "search command omits value key entirely")
+}
+
 func runArbiterTests() {
     func track(_ title: String, playing: Bool = true) -> TrackState {
         TrackState(playing: playing, title: title, artist: "A", album: "B",
@@ -418,6 +504,7 @@ func runServerResilienceTests() {
 }
 
 runMessageTests()
+runProtocolTests()
 runArbiterTests()
 runMenuBarTitleTests()
 runWebAppTests()

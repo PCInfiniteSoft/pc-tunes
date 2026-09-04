@@ -22,6 +22,10 @@ public struct SourceArbiter: Sendable {
             entries[tabId] = Entry(source: source, track: track, updatedAt: now)
         case .gone(let tabId):
             entries.removeValue(forKey: tabId)
+        case .notice, .queue:
+            // Not yet wired to anything: notices and the up-next queue don't affect
+            // which source is active. Handled elsewhere in a later task.
+            break
         }
     }
 
