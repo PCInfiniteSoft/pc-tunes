@@ -59,7 +59,10 @@ struct SettingsView: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(20)
-        .frame(width: 380)
+        // `.grouped` rather than the default automatic style: the automatic one lays a
+        // form out in two columns sized to the widest label, which for these labels is
+        // wider than any reasonable window and pushed the first row off both edges.
+        .formStyle(.grouped)
+        .frame(width: 420, height: 500)
     }
 }

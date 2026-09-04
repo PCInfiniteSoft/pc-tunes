@@ -104,6 +104,12 @@
 
   /// Reads the up-next list, capped at QUEUE_MAX. An empty or missing list is ordinary
   /// (queue closed, or nothing queued) and is reported as an empty array, not a notice.
+  ///
+  /// The queue holds the whole session, not just what is still to come, so everything
+  /// up to and including the current track is dropped. YouTube Music marks that track
+  /// with a bare `selected` attribute — verified against a 74-item queue, where exactly
+  /// one item carried it. If nothing is marked, the list is used whole rather than
+  /// discarded: a slightly wrong list beats an empty one.
   function readQueue() {
     let nodes = [];
     for (const selector of QUEUE_ITEM_SELECTORS) {
@@ -112,6 +118,10 @@
         nodes = Array.from(found);
         break;
       }
+    }
+    const current = nodes.findIndex((node) => node.hasAttribute("selected"));
+    if (current >= 0) {
+      nodes = nodes.slice(current + 1);
     }
     const items = [];
     for (const node of nodes) {

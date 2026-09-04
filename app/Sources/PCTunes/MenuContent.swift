@@ -4,6 +4,8 @@ import SwiftUI
 struct MenuContent: View {
     @ObservedObject var model: PlayerModel
 
+    @Environment(\.openSettings) private var openSettings
+
     @State private var searchQuery = ""
     @State private var isUpNextExpanded = false
 
@@ -79,7 +81,9 @@ struct MenuContent: View {
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                     }
-                    if !track.album.isEmpty {
+                    // YouTube Music reports a single's album as the song's own name, so
+                    // for a great many tracks this line would just repeat the title.
+                    if !track.album.isEmpty, track.album != track.title {
                         Text(track.album)
                             .font(.caption)
                             .foregroundStyle(.tertiary)
@@ -254,7 +258,13 @@ struct MenuContent: View {
         }
         // `SettingsLink` opens the `Settings` scene declared in `PCTunesApp` directly —
         // no closure threaded in from the app, and no window management here.
-        SettingsLink { Text("Settings…") }
+        // Not `SettingsLink`: an accessory app is never the active app, so the window
+        // it opens lands behind whatever the user was looking at, and a link offers no
+        // point at which to activate. Opening it by hand does.
+        Button("Settings…") {
+            openSettings()
+            NSApplication.shared.activate()
+        }
         Button("Quit PC Tunes") { NSApplication.shared.terminate(nil) }
             .keyboardShortcut("q")
     }
