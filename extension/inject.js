@@ -140,9 +140,17 @@
   ///
   /// The queue holds the whole session, not just what is still to come, so everything
   /// up to and including the current track is dropped. YouTube Music marks that track
-  /// with a bare `selected` attribute — verified against a 74-item queue, where exactly
-  /// one item carried it. If nothing is marked, the list is used whole rather than
-  /// discarded: a slightly wrong list beats an empty one.
+  /// with a bare `selected` attribute.
+  ///
+  /// More than one item can carry it: a track that has both an audio and a video
+  /// version appears as two adjacent entries and both are marked. Verified on a
+  /// 75-item queue playing "Clean (Taylor's Version)", where items 0 and 1 — the song
+  /// and its lyric video — were both `selected`. Cutting after the first would leave
+  /// the second at the head of the list, which is how the song playing right now ended
+  /// up shown as the one coming next.
+  ///
+  /// If nothing is marked, the list is used whole rather than discarded: a slightly
+  /// wrong list beats an empty one.
   function readQueue() {
     let nodes = [];
     for (const selector of QUEUE_ITEM_SELECTORS) {
@@ -152,9 +160,15 @@
         break;
       }
     }
-    const current = nodes.findIndex((node) => node.hasAttribute("selected"));
-    if (current >= 0) {
-      nodes = nodes.slice(current + 1);
+    const first = nodes.findIndex((node) => node.hasAttribute("selected"));
+    if (first >= 0) {
+      // Walk to the end of the marked run rather than to the last marked item
+      // anywhere, so a stray mark further down the queue cannot swallow the list.
+      let last = first;
+      while (last + 1 < nodes.length && nodes[last + 1].hasAttribute("selected")) {
+        last += 1;
+      }
+      nodes = nodes.slice(last + 1);
     }
     const items = [];
     for (const node of nodes) {

@@ -9,6 +9,10 @@ struct MenuContent: View {
     @State private var searchQuery = ""
     @State private var isUpNextExpanded = false
 
+    /// Small enough that the two of them stack within the height of the track's own
+    /// lines, so they cost the title no width it would otherwise have.
+    private static let ratingSize = CGSize(width: 24, height: 22)
+
     /// While the user is dragging the progress slider, its displayed value comes from
     /// here instead of `model.displayPosition`, so the knob does not fight the
     /// once-a-second interpolation tick mid-drag. Committed with `seek(to:)` on release.
@@ -93,9 +97,9 @@ struct MenuContent: View {
                 Spacer(minLength: 8)
                 // Beside the track rather than in the transport row: rating is about
                 // this song, where the transport is about playback in general.
-                VStack(spacing: 10) {
-                    controlButton(thumbsUpSymbol, action: model.like)
-                    controlButton(thumbsDownSymbol, action: model.dislike)
+                VStack(spacing: 2) {
+                    controlButton(thumbsUpSymbol, font: .body, size: Self.ratingSize, action: model.like)
+                    controlButton(thumbsDownSymbol, font: .body, size: Self.ratingSize, action: model.dislike)
                 }
                 .disabled(!model.extensionConnected)
             }
@@ -228,6 +232,20 @@ struct MenuContent: View {
                 model.refreshQueue()
             }
         }
+        // The queue advances with the track, so a list left open goes stale the moment
+        // the song changes. Ask again — but still only while it is on screen.
+        .onChange(of: trackIdentity) { _, _ in
+            if isUpNextExpanded {
+                model.refreshQueue()
+            }
+        }
+    }
+
+    /// What counts as "a different track" for the purpose of refreshing the list.
+    /// Title alone would miss a queue advancing between two recordings of the same song.
+    private var trackIdentity: String {
+        guard let track = model.track else { return "" }
+        return "\(track.title)\u{1F}\(track.artist)"
     }
 
     /// The only way a broken page selector reaches the user, so it needs to read as
@@ -288,11 +306,20 @@ struct MenuContent: View {
         .clipShape(RoundedRectangle(cornerRadius: 6))
     }
 
-    private func controlButton(_ symbol: String, action: @escaping () -> Void) -> some View {
+    /// - Parameters:
+    ///   - font: the glyph's size. Ratings sit beside the title rather than in the
+    ///     transport row, where transport-sized glyphs crowd out the track's name.
+    ///   - size: the clickable area, which stays comfortably larger than the glyph.
+    private func controlButton(
+        _ symbol: String,
+        font: Font = .title2,
+        size: CGSize = CGSize(width: 40, height: 30),
+        action: @escaping () -> Void
+    ) -> some View {
         Button(action: action) {
             Image(systemName: symbol)
-                .font(.title2)
-                .frame(width: 40, height: 30)
+                .font(font)
+                .frame(width: size.width, height: size.height)
                 .contentShape(Rectangle())
         }
     }
