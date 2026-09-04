@@ -15,6 +15,23 @@ struct MenuContent: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
+            } else if !model.extensionConnected {
+                HStack(alignment: .top, spacing: 12) {
+                    Image(systemName: "puzzlepiece.extension.fill")
+                        .font(.title2)
+                        .foregroundStyle(.orange)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Extension not connected")
+                            .font(.headline)
+                        Text(model.boundPort.map {
+                            "Load the extension in Chrome, then reload the YouTube Music tab. "
+                                + "Listening on port \($0)."
+                        } ?? "The local server is not listening.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                }
             } else if let track = model.track {
                 HStack(alignment: .top, spacing: 12) {
                     artwork(for: track.artwork)
@@ -54,6 +71,7 @@ struct MenuContent: View {
                     model.track?.playing == true ? "pause.fill" : "play.fill",
                     action: model.playPause
                 )
+                .disabled(!model.extensionConnected)
                 controlButton("forward.fill", action: model.next)
                     .disabled(!model.isConnected)
             }

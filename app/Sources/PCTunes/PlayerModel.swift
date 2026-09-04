@@ -15,6 +15,11 @@ final class PlayerModel: ObservableObject {
     /// Non-nil when the widget cannot function at all. The dropdown surfaces this
     /// instead of the usual "Not playing" state.
     @Published private(set) var startupFailure: String?
+    /// Whether the Chrome extension is attached. Distinct from whether anything is
+    /// playing: without this the UI cannot tell "extension missing" from "paused".
+    @Published private(set) var extensionConnected = false
+    /// The port the server actually bound, for the troubleshooting hint.
+    @Published private(set) var boundPort: UInt16?
     /// Bound to the dropdown's toggle. Reconciles itself against what `SMAppService`
     /// actually reports, so a failed registration cannot leave the toggle lying.
     @Published var launchAtLogin: Bool = LoginItem.isEnabled {
@@ -53,10 +58,14 @@ final class PlayerModel: ObservableObject {
     }
 
     private func start() {
+        server.onPeerCountChanged = { [weak self] count in
+            Task { @MainActor in self?.extensionConnected = count > 0 }
+        }
         do {
             try server.start { [weak self] message in
                 Task { @MainActor in self?.ingest(message) }
             }
+            boundPort = server.boundPort
         } catch {
             NSLog("[PC Tunes] could not bind a port in 8787-8791: \(error)")
             startupFailure = "Could not open a local port in the range 8787-8791. "

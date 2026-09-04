@@ -2,6 +2,9 @@ import Foundation
 import Network
 import PCTunesCore
 
+/// The suite binds its own range so it never fights the running app for 8787-8791.
+let testPorts: ClosedRange<UInt16> = 8880...8884
+
 func runMessageTests() {
     let stateJSON = """
     {"type":"state","tabId":42,"source":"app","playing":true,"title":"Kalapapruek",
@@ -185,7 +188,7 @@ func expectEventually(
 }
 
 func runServerTests() {
-    let server = WSServer(portRange: 8787...8791)
+    let server = WSServer(portRange: testPorts)
     let received = DispatchSemaphore(value: 0)
     let commandReceived = DispatchSemaphore(value: 0)
     var got: InboundMessage?
@@ -206,7 +209,7 @@ func runServerTests() {
         checkCount += 1
         return
     }
-    expect((8787...8791).contains(port), "bound port is inside the allowed range")
+    expect(testPorts.contains(port), "bound port is inside the allowed range")
 
     let client = NWConnection(
         to: .url(URL(string: "ws://127.0.0.1:\(port)/")!),
@@ -254,6 +257,10 @@ func runServerTests() {
     let gotHello = helloReceived.wait(timeout: .now() + 5) == .success
         && helloJSON.contains("\"type\":\"hello\"")
     expect(gotHello, "the first frame from the server is the greeting")
+    expect(
+        helloJSON.contains("\"app\":\"PC Tunes\""),
+        "the greeting identifies the app, which is what the extension gates on"
+    )
 
     expectEqual(received.wait(timeout: .now() + 5), .success, "server received a message")
     if case .state(let tabId, let source, let track)? = got {
@@ -276,7 +283,7 @@ func runServerTests() {
 
 func runServerResilienceTests() {
     // Defect 1: a second server must fall through to the next free port.
-    let first = WSServer(portRange: 8787...8791)
+    let first = WSServer(portRange: testPorts)
     do {
         try first.start { _ in }
     } catch {
@@ -284,7 +291,7 @@ func runServerResilienceTests() {
         checkCount += 1
         return
     }
-    let second = WSServer(portRange: 8787...8791)
+    let second = WSServer(portRange: testPorts)
     do {
         try second.start { _ in }
     } catch {
@@ -302,7 +309,7 @@ func runServerResilienceTests() {
 
     // Defect 3 / keepalive: an unknown message type is dropped without closing
     // the connection, so a valid message sent afterwards still arrives.
-    let server = WSServer(portRange: 8787...8791)
+    let server = WSServer(portRange: testPorts)
     let arrived = DispatchSemaphore(value: 0)
     var afterPing: InboundMessage?
     do {
@@ -351,7 +358,7 @@ func runServerResilienceTests() {
     server.stop()
 
     // Defect 2: stopping from inside the message handler must not deadlock.
-    let reentrant = WSServer(portRange: 8787...8791)
+    let reentrant = WSServer(portRange: testPorts)
     let stopped = DispatchSemaphore(value: 0)
     do {
         try reentrant.start { _ in
@@ -386,7 +393,7 @@ func runServerResilienceTests() {
     poker.cancel()
 
     // Defect 3: a peer that closes cleanly is removed from the connection table.
-    let closing = WSServer(portRange: 8787...8791)
+    let closing = WSServer(portRange: testPorts)
     do {
         try closing.start { _ in }
     } catch {

@@ -15,17 +15,27 @@ public final class WSServer {
     private var onMessage: MessageHandler?
 
     private static let helloFrame = Data(#"{"type":"hello","app":"PC Tunes"}"#.utf8)
+    private static let queueKey = DispatchSpecificKey<Void>()
 
     public private(set) var boundPort: UInt16?
 
-    /// Number of live peer connections. Reads on the server's own queue, so it is
-    /// safe to call from anywhere.
+    /// Called on the server's queue whenever a peer attaches or drops.
+    public var onPeerCountChanged: ((Int) -> Void)?
+
+    /// Number of live peer connections.
+    ///
+    /// Safe from any thread, including from inside an `onMessage` handler — those run
+    /// on `queue` already, and a `sync` hop onto a queue the caller owns deadlocks.
     public var connectionCount: Int {
-        queue.sync { connections.count }
+        if DispatchQueue.getSpecific(key: Self.queueKey) != nil {
+            return connections.count
+        }
+        return queue.sync { connections.count }
     }
 
     public init(portRange: ClosedRange<UInt16> = 8787...8791) {
         self.portRange = portRange
+        queue.setSpecific(key: Self.queueKey, value: ())
     }
 
     /// Parameters for a WebSocket peer. Exposed so tests can build a matching client.
@@ -114,27 +124,35 @@ public final class WSServer {
         )
     }
 
-    // Deliberately async: `stop()` is reachable from a message handler, which already
-    // owns `queue`, and a `sync` hop there aborts the process.
     public func stop() {
         listener?.cancel()
-        listener = nil
-        boundPort = nil
+        // Deliberately async: `stop()` is reachable from a message handler, which
+        // already owns `queue`, and a `sync` hop there aborts the process.
         queue.async { [weak self] in
             guard let self else { return }
             for connection in self.connections.values { connection.cancel() }
             self.connections.removeAll()
+            self.listener = nil
+            self.boundPort = nil
+            self.onPeerCountChanged?(self.connections.count)
         }
     }
 
     private func accept(_ connection: NWConnection) {
         let key = ObjectIdentifier(connection)
-        queue.async { self.connections[key] = connection }
+        queue.async {
+            self.connections[key] = connection
+            self.onPeerCountChanged?(self.connections.count)
+        }
 
         connection.stateUpdateHandler = { [weak self] state in
             switch state {
             case .cancelled, .failed:
-                self?.queue.async { self?.connections.removeValue(forKey: key) }
+                self?.queue.async {
+                    guard let self else { return }
+                    self.connections.removeValue(forKey: key)
+                    self.onPeerCountChanged?(self.connections.count)
+                }
             default:
                 break
             }
