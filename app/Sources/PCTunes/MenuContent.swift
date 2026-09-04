@@ -4,10 +4,6 @@ import SwiftUI
 struct MenuContent: View {
     @ObservedObject var model: PlayerModel
 
-    /// Opens the settings window. The view only calls this — it does not know how a
-    /// window gets created. Still a stub until the settings window itself exists.
-    var openSettings: () -> Void = {}
-
     @State private var searchQuery = ""
     @State private var isUpNextExpanded = false
 
@@ -256,7 +252,9 @@ struct MenuContent: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        Button("Settings…") { openSettings() }
+        // `SettingsLink` opens the `Settings` scene declared in `PCTunesApp` directly —
+        // no closure threaded in from the app, and no window management here.
+        SettingsLink { Text("Settings…") }
         Button("Quit PC Tunes") { NSApplication.shared.terminate(nil) }
             .keyboardShortcut("q")
     }

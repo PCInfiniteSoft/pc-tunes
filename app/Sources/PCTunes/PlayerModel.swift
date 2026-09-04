@@ -10,7 +10,9 @@ final class PlayerModel: ObservableObject {
     /// Addressed to no particular tab: the extension resolves the target itself.
     private static let noTab = -1
 
-    @Published private(set) var track: TrackState?
+    @Published private(set) var track: TrackState? {
+        didSet { TrackNotifier.shared.trackChanged(from: oldValue, to: track) }
+    }
     @Published private(set) var activeTabId: Int?
     /// Non-nil when the widget cannot function at all. The dropdown surfaces this
     /// instead of the usual "Not playing" state.
@@ -88,6 +90,17 @@ final class PlayerModel: ObservableObject {
     }
 
     private func start() {
+        // The dropdown's `notice` banner is the same mechanism already used for "the
+        // extension couldn't do something" — reused here for "notification permission
+        // was denied" so that reaches the user somewhere more visible than a log line.
+        TrackNotifier.shared.onAuthorizationDenied = { [weak self] in
+            self?.notice = "Notification permission was denied. Enable it in System "
+                + "Settings → Notifications → PC Tunes, then turn notifications back on "
+                + "in PC Tunes' settings."
+            self?.noticeReceivedAt = Date()
+        }
+        Hotkeys.shared.start(model: self)
+
         server.onPeerCountChanged = { [weak self] count in
             Task { @MainActor in self?.extensionConnected = count > 0 }
         }
