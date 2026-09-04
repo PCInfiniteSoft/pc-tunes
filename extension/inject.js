@@ -3,6 +3,7 @@
 
   const HEARTBEAT_MS = 5000;
   const COALESCE_MS = 500;
+  const CONFIRM_MS = 1200;
   const CONTROL_SELECTORS = {
     playPause: "#play-pause-button",
     next: ".next-button",
@@ -191,6 +192,7 @@
 
   let lastKey = "";
   let coalesceTimer = null;
+  let confirmTimer = null;
 
   function push(force) {
     const state = readState();
@@ -200,8 +202,26 @@
       state.liked, state.volume,
     ]);
     if (!force && key === lastKey) return;
+    const changed = key !== lastKey;
     lastKey = key;
     window.postMessage({ __pcTunes: true, dir: "out", payload: state }, "*");
+    if (changed) scheduleConfirm();
+  }
+
+  /// Re-reads shortly after anything changes, to catch a half-updated page.
+  ///
+  /// The whole queue streams through one MediaSource, so no media event fires when the
+  /// track changes and the heartbeat is what notices. Reading exactly as the page swaps
+  /// `mediaSession.metadata` can catch it mid-update: seen live as a dropdown showing
+  /// one track's title and artist over the next track's album and artwork. A single
+  /// re-read settles it in about a second instead of leaving it wrong until the next
+  /// beat five seconds later.
+  function scheduleConfirm() {
+    if (confirmTimer) return;
+    confirmTimer = setTimeout(() => {
+      confirmTimer = null;
+      push(true);
+    }, CONFIRM_MS);
   }
 
   function schedulePush() {

@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:PC Tunes}/app",
+            "name": "Debug PCTunesTests (app)",
+            "target": "PCTunesTests",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug PCTunesTests (app)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:PC Tunes}/app",
+            "name": "Release PCTunesTests (app)",
+            "target": "PCTunesTests",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release PCTunesTests (app)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:PC Tunes}/app",
+            "name": "Debug PCTunes (app)",
+            "target": "PCTunes",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug PCTunes (app)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:PC Tunes}/app",
+            "name": "Release PCTunes (app)",
+            "target": "PCTunes",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release PCTunes (app)"
+        }
+    ]
+}
