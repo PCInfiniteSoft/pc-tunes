@@ -180,6 +180,24 @@
     return items;
   }
 
+  /// The track named in the visible player bar, which is what the user is looking at.
+  ///
+  /// Preferred over `navigator.mediaSession.metadata` for the name and the artist,
+  /// because the two can disagree: starting playback from the home page left the
+  /// metadata naming the card that was clicked while the bar — and the audio — had
+  /// moved on to something else, so the widget showed one song while YouTube Music
+  /// showed another. The bar cannot disagree with itself.
+  ///
+  /// The byline packs artist, album and year as "bodyslam • คราม • 2010"; only the
+  /// first segment is reliably the artist, so the album still comes from the metadata.
+  function readPlayerBar() {
+    const bar = playerBar();
+    if (!bar) return { title: "", artist: "" };
+    const title = firstText(bar, ".title.ytmusic-player-bar");
+    const byline = firstText(bar, ".byline.ytmusic-player-bar");
+    return { title, artist: byline.split("•")[0].trim() };
+  }
+
   function readState() {
     const video = videoEl();
     const metadata = navigator.mediaSession && navigator.mediaSession.metadata;
@@ -188,11 +206,13 @@
     const artworkList = metadata.artwork || [];
     const artwork = artworkList.length ? artworkList[artworkList.length - 1].src : null;
 
+    // The bar is empty for a moment during a page load; the metadata covers that gap.
+    const bar = readPlayerBar();
     const timing = readTiming(video);
     const state = {
       playing: !video.paused,
-      title: metadata.title || "",
-      artist: metadata.artist || "",
+      title: bar.title || metadata.title || "",
+      artist: bar.artist || metadata.artist || "",
       album: metadata.album || "",
       artwork,
       position: timing.position,
