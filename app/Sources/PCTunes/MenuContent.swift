@@ -190,42 +190,46 @@ struct MenuContent: View {
 
     @ViewBuilder
     private var upNext: some View {
-        DisclosureGroup("Up next", isExpanded: $isUpNextExpanded) {
-            if model.queue.isEmpty {
-                Text("Nothing queued")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .padding(.top, 4)
-            } else {
-                VStack(alignment: .leading, spacing: 6) {
-                    ForEach(Array(model.queue.prefix(5).enumerated()), id: \.offset) { _, item in
-                        VStack(alignment: .leading, spacing: 1) {
-                            Text(item.title)
-                                .font(.callout)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
-                            Text(item.artist)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(1)
-                                .truncationMode(.tail)
+        // Nothing playing means nothing to be next, so the whole section goes rather
+        // than standing there empty — the same as the progress bar and volume slider.
+        if model.track != nil {
+            DisclosureGroup("Up next", isExpanded: $isUpNextExpanded) {
+                if model.queue.isEmpty {
+                    Text("Nothing queued")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .padding(.top, 4)
+                } else {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(Array(model.queue.prefix(5).enumerated()), id: \.offset) { _, item in
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(item.title)
+                                    .font(.callout)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                                Text(item.artist)
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                                    .truncationMode(.tail)
+                            }
                         }
                     }
+                    .padding(.top, 4)
                 }
-                .padding(.top, 4)
             }
-        }
-        // The list costs nothing while collapsed; only ask for it on expansion.
-        .onChange(of: isUpNextExpanded) { _, expanded in
-            if expanded {
-                model.refreshQueue()
+            // The list costs nothing while collapsed; only ask for it on expansion.
+            .onChange(of: isUpNextExpanded) { _, expanded in
+                if expanded {
+                    model.refreshQueue()
+                }
             }
-        }
-        // The queue advances with the track, so a list left open goes stale the moment
-        // the song changes. Ask again — but still only while it is on screen.
-        .onChange(of: trackIdentity) { _, _ in
-            if isUpNextExpanded {
-                model.refreshQueue()
+            // The queue advances with the track, so a list left open goes stale the
+            // moment the song changes. Ask again — but still only while it is on screen.
+            .onChange(of: trackIdentity) { _, _ in
+                if isUpNextExpanded {
+                    model.refreshQueue()
+                }
             }
         }
     }

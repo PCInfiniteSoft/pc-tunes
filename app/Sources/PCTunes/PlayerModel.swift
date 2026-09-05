@@ -241,7 +241,14 @@ final class PlayerModel: ObservableObject {
 
     private func publishActive() {
         let active = arbiter.active
+        let previousTabId = activeTabId
         activeTabId = active?.tabId
         track = active?.track
+        // The list belongs to the source it came from. Once that source is gone — or
+        // replaced by a different one — it describes nothing, and left alone it would
+        // sit under "Up next" beside "Not playing".
+        if active == nil || active?.tabId != previousTabId {
+            queue = []
+        }
     }
 }
