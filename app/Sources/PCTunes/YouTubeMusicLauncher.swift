@@ -15,24 +15,26 @@ enum YouTubeMusicLauncher {
     }
 
     /// - Parameter activating: `true` brings the window forward, for the menu item that
-    ///   exists to show it. `false` launches it hidden, so playback can start from the
-    ///   widget without taking over the screen.
+    ///   exists to show it. `false` opens it behind whatever the user is looking at.
+    ///
+    /// Deliberately not launched *hidden*, which is what this did at first. macOS
+    /// hiding an app makes Chrome treat the window as fully occluded, and an occluded
+    /// window's media pipeline is starved the same way a background tab's is: the
+    /// `<video>` element sits at `readyState` 0 with a `NaN` duration and playback
+    /// restarts from zero every few seconds. Opening behind, without activating, keeps
+    /// the window off the screen's foreground without convincing Chrome nobody is
+    /// watching.
     static func open(activating: Bool = true) {
         let configuration = NSWorkspace.OpenConfiguration()
         configuration.activates = activating
-        configuration.hides = !activating
 
         if let app = installedApp() {
             NSWorkspace.shared.openApplication(
                 at: URL(fileURLWithPath: app),
                 configuration: configuration
-            ) { running, error in
+            ) { _, error in
                 if let error {
                     NSLog("[PC Tunes] could not open \(app): \(error)")
-                    return
-                }
-                if !activating, let running {
-                    keepHidden(running)
                 }
             }
             return
@@ -49,38 +51,6 @@ enum YouTubeMusicLauncher {
                 NSLog("[PC Tunes] could not open \(url) with the default browser: \(error)")
             }
         }
-    }
-
-    /// How long a launch is watched for a window that unhides the app behind our back.
-    private static let hideWindowSeconds: TimeInterval = 8
-    private static let hideInterval: TimeInterval = 0.25
-
-    /// Keeps a freshly launched web app out of the way.
-    ///
-    /// `OpenConfiguration.hides` is applied at launch, but a Chromium web app shim only
-    /// creates its window once the browser process is up — and showing that window
-    /// unhides the app again, so the flag alone lets the window appear a beat later.
-    /// Re-hiding on a short timer puts it back before it has been on screen long enough
-    /// to steal focus or a Space switch, and leaves the app running in the Dock, which
-    /// is where someone who wants to see it can click it.
-    ///
-    /// It stops as soon as the app is hidden with a window to its name, so a user who
-    /// deliberately clicks the Dock icon during those few seconds is not fought with.
-    private static func keepHidden(_ app: NSRunningApplication) {
-        let deadline = Date().addingTimeInterval(hideWindowSeconds)
-
-        func tick() {
-            guard !app.isTerminated, Date() < deadline else { return }
-            if app.isHidden {
-                // Hidden and finished launching: the window exists and is put away.
-                if app.isFinishedLaunching { return }
-            } else {
-                app.hide()
-            }
-            DispatchQueue.main.asyncAfter(deadline: .now() + hideInterval, execute: tick)
-        }
-
-        DispatchQueue.main.async(execute: tick)
     }
 
     /// Every `.app` directly inside `~/Applications` or one level below it, paired with

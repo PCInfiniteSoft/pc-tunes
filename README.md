@@ -58,7 +58,7 @@ See [INSTALL.md](INSTALL.md) for step-by-step setup (English), or
 - Volume control
 - An up-next list, fetched on demand when you expand it
 - Cold-start playback: press play with nothing open and PC Tunes launches YouTube
-  Music hidden — it stays in the Dock, never taking the screen — and starts playing
+  Music behind whatever you are looking at, and starts playing
 - Launch at login
 - A settings window (menu bar title length, notifications, hotkeys)
 - Optional notifications when the track changes
