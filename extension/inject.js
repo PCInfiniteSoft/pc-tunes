@@ -277,6 +277,96 @@
     notice("Couldn't start playback — no queued track or playable item was found. YouTube Music's page may have changed.");
   }
 
+  function runCommand(action, data) {
+    // focusTab is handled entirely by the service worker.
+    if (action === "focusTab") return;
+
+    if (action === "startPlayback") {
+      startPlayback();
+      return;
+    }
+
+    if (action === "like") {
+      clickRatingButton("like");
+      return;
+    }
+
+    if (action === "dislike") {
+      clickRatingButton("dislike");
+      return;
+    }
+
+    if (action === "volume") {
+      const video = videoEl();
+      if (!video) {
+        console.warn("[PC Tunes] volume control not found: no video element");
+        notice("Volume control is unavailable — YouTube Music's page has changed.");
+        return;
+      }
+      if (typeof data.value !== "number") return;
+      video.volume = Math.min(1, Math.max(0, data.value));
+      setTimeout(() => push(true), 100);
+      return;
+    }
+
+    if (action === "seek") {
+      const video = videoEl();
+      if (!video) {
+        console.warn("[PC Tunes] seek control not found: no video element");
+        notice("Seek is unavailable — YouTube Music's page has changed.");
+        return;
+      }
+      if (typeof data.value !== "number") return;
+      // Seek through the player, on the same clock the position was reported on.
+      // Writing `video.currentTime` would land at that offset into the whole session:
+      // once a second track has played, dragging to 1:00 jumps back into the first.
+      const timing = readTiming(video);
+      const target = Math.min(Math.max(0, data.value), timing.duration || 0);
+      const player = moviePlayer();
+      if (player && typeof player.seekTo === "function") {
+        player.seekTo(target, true);
+      } else {
+        video.currentTime = target;
+      }
+      // Push immediately, not after the usual settle delay, so the app's local
+      // interpolation resyncs to the new position right away.
+      push(true);
+      return;
+    }
+
+    if (action === "requestQueue") {
+      window.postMessage({ __pcTunes: true, dir: "out", kind: "queue", items: readQueue() }, "*");
+      return;
+    }
+
+    const selector = CONTROL_SELECTORS[action];
+    const bar = playerBar();
+    const button = selector && bar ? bar.querySelector(selector) : null;
+    if (button) {
+      button.click();
+      setTimeout(() => push(true), 300);
+      return;
+    }
+
+    // Fallback for play/pause only. Next and previous have no equivalent.
+    if (action === "playPause") {
+      const video = videoEl();
+      if (video) {
+        if (video.paused) { video.play(); } else { video.pause(); }
+        setTimeout(() => push(true), 300);
+        return;
+      }
+    }
+    console.warn("[PC Tunes] control not found for action:", action);
+    if (action === "next" || action === "prev") {
+      notice("Next and previous are unavailable — YouTube Music's page has changed.");
+    } else if (action === "playPause") {
+      notice("Play/pause is unavailable — YouTube Music's page has changed.");
+    } else {
+      notice(`"${action}" is unavailable — YouTube Music's page has changed.`);
+    }
+  }
+
   window.addEventListener("message", (event) => {
     if (event.source !== window) return;
     const data = event.data;
