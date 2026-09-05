@@ -35,6 +35,8 @@
   // inside `ytmusic-player-queue-item`.
   const QUEUE_TITLE_SELECTOR = ".song-title";
   const QUEUE_ARTIST_SELECTOR = ".byline";
+  /// What a queue item's `play-button-state` reads when it is not the current track.
+  const QUEUE_IDLE_STATE = "default";
 
   /// Two player bars exist in the page; only one is ever visible, and the hidden one
   /// carries a full set of identical-looking controls that do nothing. Verified by
@@ -138,17 +140,20 @@
   /// (queue closed, or nothing queued) and is reported as an empty array, not a notice.
   ///
   /// The queue holds the whole session, not just what is still to come, so everything
-  /// up to and including the current track is dropped. YouTube Music marks that track
-  /// with a bare `selected` attribute.
+  /// up to and including the current track is dropped.
   ///
-  /// More than one item can carry it: a track that has both an audio and a video
-  /// version appears as two adjacent entries and both are marked. Verified on a
-  /// 75-item queue playing "Clean (Taylor's Version)", where items 0 and 1 — the song
-  /// and its lyric video — were both `selected`. Cutting after the first would leave
-  /// the second at the head of the list, which is how the song playing right now ended
-  /// up shown as the one coming next.
+  /// The current track is the one item whose `play-button-state` is not "default" —
+  /// it reads "playing", "paused" or "loading". Verified over a 86-item queue across
+  /// eight skips plus a next and a previous: exactly one item was ever non-default,
+  /// and it was always the track `navigator.mediaSession` reported.
   ///
-  /// If nothing is marked, the list is used whole rather than discarded: a slightly
+  /// Not `selected`, which looks like the obvious marker and is not one: marks
+  /// accumulate on items left behind, so a queue playing its thirteenth track carried
+  /// `selected` on items 1, 3 and 12 at once. Cutting at the first of those put tracks
+  /// that had already played at the top of "up next", where they then sat unchanged
+  /// however many times the song moved on.
+  ///
+  /// If no item is marked, the list is used whole rather than discarded: a slightly
   /// wrong list beats an empty one.
   function readQueue() {
     let nodes = [];
@@ -159,15 +164,11 @@
         break;
       }
     }
-    const first = nodes.findIndex((node) => node.hasAttribute("selected"));
-    if (first >= 0) {
-      // Walk to the end of the marked run rather than to the last marked item
-      // anywhere, so a stray mark further down the queue cannot swallow the list.
-      let last = first;
-      while (last + 1 < nodes.length && nodes[last + 1].hasAttribute("selected")) {
-        last += 1;
-      }
-      nodes = nodes.slice(last + 1);
+    const current = nodes.findIndex(
+      (node) => (node.getAttribute("play-button-state") || QUEUE_IDLE_STATE) !== QUEUE_IDLE_STATE
+    );
+    if (current >= 0) {
+      nodes = nodes.slice(current + 1);
     }
     const items = [];
     for (const node of nodes) {
