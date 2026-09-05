@@ -34,6 +34,15 @@ const lastState = new Map();
 const readyTabs = new Set();
 let pendingStartAt = 0;
 
+/// How long a start the widget asked for has to actually begin playing before the
+/// follow-up minimise is given up on.
+const MINIMIZE_DEADLINE_MS = 30000;
+
+/// The tab whose window is to be put away once its playback starts, and the instant
+/// that intent expires. Set only for a start the widget itself asked for.
+let minimizeTab = null;
+let minimizeBy = 0;
+
 async function windowKindFor(tabId) {
   try {
     const tab = await chrome.tabs.get(tabId);
@@ -102,7 +111,36 @@ function scheduleReconnect() {
 }
 
 function startPlaybackIn(tabId) {
+  // The widget asked for this, so the window it opens is not one the user went looking
+  // for: put it away again as soon as it is actually playing.
+  minimizeTab = tabId;
+  minimizeBy = Date.now() + MINIMIZE_DEADLINE_MS;
   chrome.tabs.sendMessage(tabId, { kind: "cmd", action: "startPlayback" }).catch(() => {});
+}
+
+/// Puts a web app window away once the track it was opened for is really playing.
+///
+/// Minimised, not hidden. Hiding the app makes Chrome treat the window as fully
+/// occluded and starves the page's media pipeline — the `<video>` element never gets
+/// past `readyState` 0 and playback restarts from zero every few seconds. A minimised
+/// window keeps playing: measured across a minute of a minimised web app, the position
+/// advanced by exactly five seconds on every five-second heartbeat.
+///
+/// Waits for `playing` rather than minimising straight away, because a window put away
+/// before its media pipeline is up gets starved in the same way.
+///
+/// Only ever an app window. Minimising an ordinary browser window would take whatever
+/// else the user had open in it down with the music.
+function minimizeIfPending(tabId, windowId, payload) {
+  if (minimizeTab !== tabId) return;
+  if (Date.now() > minimizeBy) {
+    minimizeTab = null;
+    return;
+  }
+  if (!payload || payload.playing !== true) return;
+  minimizeTab = null;
+  if (knownTabs.get(tabId) !== "app" || typeof windowId !== "number") return;
+  chrome.windows.update(windowId, { state: "minimized" }).catch(() => {});
 }
 
 function mostRecentReadyTab() {
@@ -301,11 +339,14 @@ chrome.runtime.onMessage.addListener((message, sender) => {
 
   // Once a tab's window kind is known, label and forward synchronously: two updates
   // from one tab must not overtake each other on the way to the app.
+  const windowId = sender.tab && sender.tab.windowId;
+
   const known = knownTabs.get(tabId);
   if (known) {
     const state = stateMessage(tabId, known, message.payload);
     lastState.set(tabId, state);
     sendToApp(state);
+    minimizeIfPending(tabId, windowId, message.payload);
     return;
   }
 
@@ -314,6 +355,7 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     const state = stateMessage(tabId, source, message.payload);
     lastState.set(tabId, state);
     sendToApp(state);
+    minimizeIfPending(tabId, windowId, message.payload);
   });
 });
 
