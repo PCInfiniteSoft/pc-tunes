@@ -38,6 +38,12 @@ let pendingStartAt = 0;
 /// follow-up minimise is given up on.
 const MINIMIZE_DEADLINE_MS = 30000;
 
+/// How far into the track playback has to have actually got before the window can be
+/// put away. `playing` on its own does not mean the media pipeline is up: a window
+/// minimised the moment it appeared reported `playing: true` with the duration read
+/// correctly and the position pinned at 0.0 for forty-five seconds straight.
+const MINIMIZE_MIN_POSITION = 3;
+
 /// The tab whose window is to be put away once its playback starts, and the instant
 /// that intent expires. Set only for a start the widget itself asked for.
 let minimizeTab = null;
@@ -126,8 +132,11 @@ function startPlaybackIn(tabId) {
 /// window keeps playing: measured across a minute of a minimised web app, the position
 /// advanced by exactly five seconds on every five-second heartbeat.
 ///
-/// Waits for `playing` rather than minimising straight away, because a window put away
-/// before its media pipeline is up gets starved in the same way.
+/// Waits for the position to have actually moved, not merely for `playing`. A window
+/// put away before its media pipeline is up is starved exactly as a hidden one is, and
+/// `playing` goes true well before that: minimising 600ms after the window appeared
+/// gave forty-five seconds of `playing: true` with the position stuck at 0.0, which
+/// recovered — the position climbing again — the moment the window was restored.
 ///
 /// Only ever an app window. Minimising an ordinary browser window would take whatever
 /// else the user had open in it down with the music.
@@ -138,6 +147,7 @@ function minimizeIfPending(tabId, windowId, payload) {
     return;
   }
   if (!payload || payload.playing !== true) return;
+  if (typeof payload.position !== "number" || payload.position < MINIMIZE_MIN_POSITION) return;
   minimizeTab = null;
   if (knownTabs.get(tabId) !== "app" || typeof windowId !== "number") return;
   chrome.windows.update(windowId, { state: "minimized" }).catch(() => {});
