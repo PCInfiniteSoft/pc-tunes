@@ -11,8 +11,21 @@
   /// extension's error list until the tab is reloaded. Stop at the first one.
   let bridgeAlive = true;
 
+  function teardown() {
+    bridgeAlive = false;
+    window.removeEventListener("message", onPageMessage);
+  }
+
   function send(message) {
     if (!bridgeAlive) return;
+    // `chrome.runtime.id` reads undefined the moment this script is orphaned, and
+    // reading it is the only way to notice without provoking the throw — which is
+    // logged to the extension's error page whether or not it is caught. The catch
+    // below stays as the backstop for a context that dies mid-call.
+    if (!chrome.runtime || !chrome.runtime.id) {
+      teardown();
+      return;
+    }
     try {
       const sending = chrome.runtime.sendMessage(message);
       if (sending && typeof sending.catch === "function") {
@@ -21,8 +34,7 @@
         sending.catch(() => {});
       }
     } catch (error) {
-      bridgeAlive = false;
-      window.removeEventListener("message", onPageMessage);
+      teardown();
     }
   }
 

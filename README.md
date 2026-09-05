@@ -155,9 +155,9 @@ Two entries on the extension's own **Errors** page are normal and can be ignored
   on the way to finding it on a port other than the first. The browser logs a failed
   WebSocket connection whether or not the code catches it; there is no way to silence
   it from the extension.
-- `Extension context invalidated` — logged once per open YouTube Music tab when the
-  extension is reloaded, by the content script that reload orphaned. It stops there;
-  the tab reconnects on its next reload.
+- `Extension context invalidated` — should no longer appear, but an entry from before
+  a reload stays on that page until "Clear all" is pressed, so one seen there may
+  simply be old.
 
 3. **Console.app**, because the Swift app logs through `NSLog`. Filter for `PC Tunes`
    or `PCTunes`. This is where you'll see port-binding failures (`could not bind a
