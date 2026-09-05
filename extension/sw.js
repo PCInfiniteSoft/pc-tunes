@@ -185,7 +185,6 @@ function connect() {
         kind: "cmd",
         action: message.action,
         value: message.value,
-        text: message.text,
       })
       .catch(() => {});
   };

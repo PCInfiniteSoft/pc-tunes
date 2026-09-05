@@ -147,6 +147,18 @@ need one specific one:
    `[PC Tunes] no greeting on port 8787 — not our server` if something else is
    squatting on that port. If the dropdown says "Extension not connected", this is
    where to look first.
+Two entries on the extension's own **Errors** page are normal and can be ignored:
+
+- `WebSocket connection to 'ws://127.0.0.1:8787/' failed:
+  net::ERR_CONNECTION_REFUSED` — logged every time the extension probes a port that
+  nothing is listening on, which is what happens whenever PC Tunes is not running and
+  on the way to finding it on a port other than the first. The browser logs a failed
+  WebSocket connection whether or not the code catches it; there is no way to silence
+  it from the extension.
+- `Extension context invalidated` — logged once per open YouTube Music tab when the
+  extension is reloaded, by the content script that reload orphaned. It stops there;
+  the tab reconnects on its next reload.
+
 3. **Console.app**, because the Swift app logs through `NSLog`. Filter for `PC Tunes`
    or `PCTunes`. This is where you'll see port-binding failures (`could not bind a
    port in 8787-8791`), login-item registration errors, and hotkey registration
