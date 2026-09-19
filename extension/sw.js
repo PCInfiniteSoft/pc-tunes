@@ -49,6 +49,33 @@ const MINIMIZE_MIN_POSITION = 3;
 let minimizeTab = null;
 let minimizeBy = 0;
 
+/// How long after a track change we keep watching for a starved media pipeline.
+const STALL_WINDOW_MS = 25000;
+/// A new track that has got this far is past the point where it starves.
+const STALL_SETTLED_POSITION = 15;
+/// The track change we are watching, as `{ tabId, until }`, or null.
+let stallWatch = null;
+
+/// Where the id of the last track the extension saw is kept, so a cold start can go
+/// back to it instead of guessing from the home page. Written to `chrome.storage.local`
+/// so it survives the worker being unloaded and the browser being restarted.
+const LAST_VIDEO_KEY = "lastVideoId";
+let lastVideoId = "";
+chrome.storage.local
+  .get(LAST_VIDEO_KEY)
+  .then((stored) => {
+    const value = stored && stored[LAST_VIDEO_KEY];
+    if (typeof value === "string" && value && !lastVideoId) lastVideoId = value;
+  })
+  .catch(() => {});
+
+function rememberVideo(payload) {
+  const id = payload && payload.videoId;
+  if (typeof id !== "string" || !id || id === lastVideoId) return;
+  lastVideoId = id;
+  chrome.storage.local.set({ [LAST_VIDEO_KEY]: id }).catch(() => {});
+}
+
 async function windowKindFor(tabId) {
   try {
     const tab = await chrome.tabs.get(tabId);
@@ -121,7 +148,9 @@ function startPlaybackIn(tabId) {
   // for: put it away again as soon as it is actually playing.
   minimizeTab = tabId;
   minimizeBy = Date.now() + MINIMIZE_DEADLINE_MS;
-  chrome.tabs.sendMessage(tabId, { kind: "cmd", action: "startPlayback" }).catch(() => {});
+  chrome.tabs
+    .sendMessage(tabId, { kind: "cmd", action: "startPlayback", value: lastVideoId })
+    .catch(() => {});
 }
 
 /// Puts a web app window away once the track it was opened for is really playing.
@@ -151,6 +180,37 @@ function minimizeIfPending(tabId, windowId, payload) {
   minimizeTab = null;
   if (knownTabs.get(tabId) !== "app" || typeof windowId !== "number") return;
   chrome.windows.update(windowId, { state: "minimized" }).catch(() => {});
+}
+
+/// Restarts a track that stopped by itself moments after we changed it.
+///
+/// Loading a track is the fragile moment: a page whose window is minimised — and a
+/// freshly opened one above all — can start a new track, play a few seconds of what it
+/// had buffered, and then stop dead. Measured on a cold start: the window was minimised
+/// three seconds in, `next` arrived five seconds after that, and the new track played to
+/// 6.47s and stayed frozen there for two and a half minutes. Playing it again is enough
+/// to recover it; the user had been doing that by hand.
+///
+/// Only a pause this soon after a change *we* asked for is treated this way, and only
+/// once. Its cost when the guess is wrong — the user hit Next and then paused on the
+/// page within the same few seconds — is one unwanted resume, which the next press of
+/// pause undoes. A pause the user asks for through the widget clears the watch outright,
+/// and so does the track settling in (`STALL_SETTLED_POSITION`), which is the ordinary
+/// way this ends.
+function recoverStalledTrack(tabId, payload) {
+  if (!stallWatch || stallWatch.tabId !== tabId || !payload) return;
+  if (Date.now() > stallWatch.until) {
+    stallWatch = null;
+    return;
+  }
+  if (payload.playing === true) {
+    if (typeof payload.position === "number" && payload.position >= STALL_SETTLED_POSITION) {
+      stallWatch = null;
+    }
+    return;
+  }
+  stallWatch = null;
+  chrome.tabs.sendMessage(tabId, { kind: "cmd", action: "playPause" }).catch(() => {});
 }
 
 function mostRecentReadyTab() {
@@ -228,6 +288,14 @@ function connect() {
       return;
     }
 
+    if (message.action === "next" || message.action === "prev") {
+      stallWatch = { tabId: message.tabId, until: Date.now() + STALL_WINDOW_MS };
+    } else if (message.action === "playPause") {
+      // The user is working the transport themselves; whatever they leave it on is
+      // what they meant.
+      stallWatch = null;
+    }
+
     chrome.tabs
       .sendMessage(message.tabId, {
         kind: "cmd",
@@ -285,6 +353,11 @@ function stateMessage(tabId, source, payload) {
   }
   if (typeof state.volume === "number") {
     message.volume = state.volume;
+  }
+  // Same reasoning as `liked`: a page that could not tell says nothing, and the app
+  // draws nothing, rather than both of them guessing at "song".
+  if (state.mode === "song" || state.mode === "video") {
+    message.mode = state.mode;
   }
   return message;
 }
@@ -357,6 +430,8 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     lastState.set(tabId, state);
     sendToApp(state);
     minimizeIfPending(tabId, windowId, message.payload);
+    recoverStalledTrack(tabId, message.payload);
+    rememberVideo(message.payload);
     return;
   }
 
@@ -366,6 +441,8 @@ chrome.runtime.onMessage.addListener((message, sender) => {
     lastState.set(tabId, state);
     sendToApp(state);
     minimizeIfPending(tabId, windowId, message.payload);
+    recoverStalledTrack(tabId, message.payload);
+    rememberVideo(message.payload);
   });
 });
 

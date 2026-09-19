@@ -13,6 +13,16 @@ public enum LikeState: String, Codable, Equatable, Sendable {
     case dislike
 }
 
+/// Which of a track's two forms is playing.
+///
+/// YouTube Music serves many tracks as both a song and an official music video —
+/// different files, of different lengths. Absent means the page gave no answer, which
+/// is what any page but a watch page does.
+public enum PlaybackMode: String, Codable, Equatable, Sendable {
+    case song
+    case video
+}
+
 /// A snapshot of what YouTube Music is playing.
 public struct TrackState: Equatable, Sendable {
     public var playing: Bool
@@ -27,11 +37,13 @@ public struct TrackState: Equatable, Sendable {
     public var duration: Double
     public var liked: LikeState?
     public var volume: Double?
+    /// Song or video, or `nil` when the page did not say.
+    public var mode: PlaybackMode?
 
     public init(
         playing: Bool, title: String, artist: String, album: String,
         artwork: URL?, position: Double? = nil, duration: Double,
-        liked: LikeState? = nil, volume: Double? = nil
+        liked: LikeState? = nil, volume: Double? = nil, mode: PlaybackMode? = nil
     ) {
         self.playing = playing
         self.title = title
@@ -42,6 +54,7 @@ public struct TrackState: Equatable, Sendable {
         self.duration = duration
         self.liked = liked
         self.volume = volume
+        self.mode = mode
     }
 }
 
@@ -88,6 +101,7 @@ public enum MessageDecoder {
         let duration: Double?
         let liked: LikeState?
         let volume: Double?
+        let mode: PlaybackMode?
         let text: String?
         let items: [QueueItem]?
     }
@@ -110,7 +124,8 @@ public enum MessageDecoder {
                 position: raw.position,
                 duration: raw.duration ?? 0,
                 liked: raw.liked,
-                volume: raw.volume
+                volume: raw.volume,
+                mode: raw.mode
             )
             return .state(tabId: tabId, source: source, track: track)
         case "gone":

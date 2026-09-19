@@ -6,7 +6,7 @@
   "background": {
     "service_worker": "sw.js"
   },
-  "permissions": ["alarms"],
+  "permissions": ["alarms", "storage"],
   "content_scripts": [
     {
       "matches": ["https://music.youtube.com/*"],

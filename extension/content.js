@@ -59,7 +59,10 @@
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message) return;
     if (message.kind === "alive") {
-      // Answering at all is the point — it proves this content script still exists.
+      // Answering at all proves this content script still exists. Asking the page for
+      // a fresh read at the same time costs nothing and keeps the app's picture from
+      // going stale when the page's own timers are throttled.
+      window.postMessage({ __pcTunes: true, dir: "in", action: "refresh" }, "*");
       sendResponse({ alive: true });
       return;
     }

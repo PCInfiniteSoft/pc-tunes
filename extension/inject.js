@@ -38,6 +38,19 @@
   /// What a queue item's `play-button-state` reads when it is not the current track.
   const QUEUE_IDLE_STATE = "default";
 
+  /// The song/video switch on the player page. One per page, on watch pages only.
+  const AV_TOGGLE_SELECTOR = "ytmusic-av-toggle";
+  /// Present on the toggle when the current item exists as both a song and a video.
+  const AV_COUNTERPART_ATTR = "selected-queue-item-has-counterpart";
+  /// Present when a video form of the current item exists.
+  const AV_HAS_VIDEO_ATTR = "selected-item-has-video";
+  /// `"true"` when the page is set to prefer the song. Mirrors `playback-mode`.
+  const AV_AUDIO_SELECTED_ATTR = "is-audio-playback-mode-selected";
+  /// The two buttons carry no id and no stable text — "Song" and "Video" are localized,
+  /// as is the toggle's own `song-audio-label` — so their class is the only handle on
+  /// them that survives a listener whose YouTube is not in English.
+  const SONG_BUTTON_SELECTOR = "button.song-button";
+
   /// Two player bars exist in the page; only one is ever visible, and the hidden one
   /// carries a full set of identical-looking controls that do nothing. Verified by
   /// clicking `.next-button` inside the visible bar and observing
@@ -57,6 +70,23 @@
   /// current track — verified against `watch?v=6uxTE0h6w94`, where `getDuration()`
   /// returned 293 for a track that is 4:53 long.
   const moviePlayer = () => document.getElementById("movie_player");
+
+  /// The id of the video the player has loaded, or "" when there is none.
+  ///
+  /// `getVideoData()` is the player's own answer and stays right through YouTube Music's
+  /// in-page navigation; the URL is the fallback for the moment before the player is up.
+  function readVideoId() {
+    const player = moviePlayer();
+    if (player && typeof player.getVideoData === "function") {
+      try {
+        const data = player.getVideoData();
+        if (data && typeof data.video_id === "string" && data.video_id) return data.video_id;
+      } catch (error) {
+        // Fall through to the URL.
+      }
+    }
+    return new URLSearchParams(location.search).get("v") || "";
+  }
 
   /// Position and duration of the track playing now, both in seconds.
   ///
@@ -128,6 +158,64 @@
     }
     console.warn(`[PC Tunes] ${kind} control not found`);
     notice("Like and dislike are unavailable — YouTube Music's page has changed.");
+  }
+
+  /// Which form of the track is playing, and whether the other one exists.
+  ///
+  /// Returns null off a watch page, where there is no toggle and so no answer.
+  ///
+  /// The page's preference is not the truth and cannot be read as if it were: on an
+  /// item that exists only as a video, the toggle reports the song as selected while
+  /// the video plays on. Verified against an hour-long compilation, where clicking
+  /// Song left both the video id and the 3673-second duration exactly as they were.
+  /// So the preference is consulted only when both forms exist and the page therefore
+  /// has something to honour it with.
+  function readAvToggle() {
+    const toggle = document.querySelector(AV_TOGGLE_SELECTOR);
+    if (!toggle) return null;
+    const hasCounterpart = toggle.hasAttribute(AV_COUNTERPART_ATTR);
+    if (!hasCounterpart) {
+      return {
+        mode: toggle.hasAttribute(AV_HAS_VIDEO_ATTR) ? "video" : "song",
+        hasCounterpart,
+      };
+    }
+    return {
+      mode: toggle.getAttribute(AV_AUDIO_SELECTED_ATTR) === "true" ? "song" : "video",
+      hasCounterpart,
+    };
+  }
+
+  /// The track the song preference has already been decided for, so each one is asked
+  /// about once. Deciding is deliberately skipped while the toggle is missing — during
+  /// a page load it briefly is — so that a track is never written off before the page
+  /// could answer for it.
+  let songAskedFor = "";
+
+  /// Asks for the song whenever the video is playing and a song of the same track
+  /// exists.
+  ///
+  /// The two are separate files of different lengths, so switching starts the track
+  /// again from zero; there is nothing to seek to. That is accepted rather than worked
+  /// around. It costs little in practice: the page keeps the preference across track
+  /// changes and only forgets it on a reload, so the track it interrupts is usually
+  /// the first one after the web app opened, seconds in.
+  ///
+  /// An item with no song form — a compilation, a live set — is left playing. Nothing
+  /// is reported when the button cannot be found either: the badge already says
+  /// "Video", which is the whole of what went wrong.
+  function preferSong(state) {
+    const toggle = document.querySelector(AV_TOGGLE_SELECTOR);
+    if (!toggle || !state.videoId || state.videoId === songAskedFor) return;
+    songAskedFor = state.videoId;
+    if (state.mode !== "video" || !toggle.hasAttribute(AV_COUNTERPART_ATTR)) return;
+    const button = toggle.querySelector(SONG_BUTTON_SELECTOR);
+    if (!button) {
+      console.warn("[PC Tunes] song button not found; leaving the video playing");
+      return;
+    }
+    button.click();
+    setTimeout(() => push(true), 1000);
   }
 
   function firstText(scope, selector) {
@@ -218,9 +306,12 @@
       position: timing.position,
       duration: timing.duration,
       volume: Number.isFinite(video.volume) ? video.volume : 1,
+      videoId: readVideoId(),
     };
     const liked = readLiked();
     if (liked) state.liked = liked;
+    const av = readAvToggle();
+    if (av) state.mode = av.mode;
     return state;
   }
 
@@ -231,9 +322,10 @@
   function push(force) {
     const state = readState();
     if (!state) return;
+    preferSong(state);
     const key = JSON.stringify([
       state.playing, state.title, state.artist, state.album, state.artwork,
-      state.liked, state.volume,
+      state.liked, state.volume, state.mode,
     ]);
     if (!force && key === lastKey) return;
     const changed = key !== lastKey;
@@ -270,7 +362,24 @@
   /// link on the page (see `firstPlayableLink`). The page is often still loading when
   /// this arrives, so it keeps looking until something is playable or the deadline
   /// passes.
-  function startPlayback(deadline) {
+  /// True once this page load has already navigated to reach a track, so a repeated
+  /// `startPlayback` cannot send it round the same loop again.
+  let navigatedToStart = false;
+
+  /// Starts playing, preferring the track the widget last saw over anything the page
+  /// happens to be showing.
+  ///
+  /// The home page is a poor place to guess from: its first playable link is the first
+  /// card of "Listen again", which is whatever was played last — often an hour-long
+  /// compilation whose one title never matches the song currently audible inside it.
+  /// Measured on a cold start: it began "รวมเพลงเพราะจัง เปิดฟังเพลินๆ", a single
+  /// 3673-second video. YouTube Music itself names that video, not the song, so no
+  /// amount of reading the page can recover the right title. Going straight to a
+  /// remembered track avoids the guess entirely.
+  ///
+  /// `videoId` is empty the first time the widget is ever used, and the home-page link
+  /// remains the fallback for that.
+  function startPlayback(deadline, videoId) {
     const stopAt = deadline || Date.now() + START_TIMEOUT_MS;
 
     const video = videoEl();
@@ -282,6 +391,12 @@
       return;
     }
 
+    if (videoId && !navigatedToStart) {
+      navigatedToStart = true;
+      location.href = `https://music.youtube.com/watch?v=${encodeURIComponent(videoId)}`;
+      return;
+    }
+
     const link = firstPlayableLink();
     if (link) {
       link.click();
@@ -290,7 +405,7 @@
     }
 
     if (Date.now() < stopAt) {
-      setTimeout(() => startPlayback(stopAt), START_POLL_MS);
+      setTimeout(() => startPlayback(stopAt, videoId), START_POLL_MS);
       return;
     }
     console.warn("[PC Tunes] nothing to start: no queued track and no playable link found");
@@ -301,8 +416,18 @@
     // focusTab is handled entirely by the service worker.
     if (action === "focusTab") return;
 
+    // Asked for on the worker's keepalive tick, so the app's picture does not depend
+    // on a timer inside the page. Chrome throttles a hidden page's timers to once a
+    // minute; a page playing audio is exempt, so this is not what made the widget go
+    // stale in practice — but a *paused* minimised page is not exempt, and the worker's
+    // timer is the one this extension controls.
+    if (action === "refresh") {
+      push(true);
+      return;
+    }
+
     if (action === "startPlayback") {
-      startPlayback();
+      startPlayback(undefined, typeof data.value === "string" ? data.value : "");
       return;
     }
 

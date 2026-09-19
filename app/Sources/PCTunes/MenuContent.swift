@@ -4,7 +4,10 @@ import SwiftUI
 struct MenuContent: View {
     @ObservedObject var model: PlayerModel
 
-    @Environment(\.openSettings) private var openSettings
+    /// Opens the Settings window. Passed in rather than taken from
+    /// `@Environment(\.openSettings)` because this view is hosted in an AppKit popover
+    /// (see AppDelegate), where that environment value is never delivered.
+    let openSettings: () -> Void
 
     @State private var isUpNextExpanded = false
 
@@ -72,16 +75,33 @@ struct MenuContent: View {
             }
         } else if let track = model.track {
             HStack(alignment: .top, spacing: 12) {
-                artwork(for: track.artwork)
+                // The artwork and the title are the two things a person reaches for to
+                // get to the page itself, and the dropdown offered no other way there.
+                Button(action: model.openYouTubeMusic) {
+                    artwork(for: track.artwork)
+                }
+                .help(Self.openHelp)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(track.title)
-                        .font(.headline)
-                        .lineLimit(2)
-                    if !track.artist.isEmpty {
-                        Text(track.artist)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
+                    Button(action: model.openYouTubeMusic) {
+                        Text(track.title)
+                            .font(.headline)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    .help(Self.openHelp)
+                    if !track.artist.isEmpty || track.mode != nil {
+                        HStack(spacing: 6) {
+                            if !track.artist.isEmpty {
+                                Text(track.artist)
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(1)
+                            }
+                            if let mode = track.mode {
+                                modeBadge(mode)
+                            }
+                        }
                     }
                     // YouTube Music reports a single's album as the song's own name, so
                     // for a great many tracks this line would just repeat the title.
@@ -270,20 +290,29 @@ struct MenuContent: View {
                 .foregroundStyle(.secondary)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        // `SettingsLink` opens the `Settings` scene declared in `PCTunesApp` directly —
-        // no closure threaded in from the app, and no window management here.
-        // Not `SettingsLink`: an accessory app is never the active app, so the window
-        // it opens lands behind whatever the user was looking at, and a link offers no
-        // point at which to activate. Opening it by hand does.
-        Button("Settings…") {
-            openSettings()
-            NSApplication.shared.activate()
-        }
+        Button("Settings…", action: openSettings)
         Button("Quit PC Tunes") { NSApplication.shared.terminate(nil) }
             .keyboardShortcut("q")
     }
 
     // MARK: - Helpers
+
+    private static let openHelp = "Open YouTube Music"
+
+    /// Says which of a track's two forms is playing. Drawn only when the page said —
+    /// YouTube Music serves many tracks as both a song and a music video, of different
+    /// lengths, and the widget would otherwise give no sign of which one it had.
+    private func modeBadge(_ mode: PlaybackMode) -> some View {
+        Text(mode == .song ? "Song" : "Video")
+            .font(.caption2)
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 1)
+            .background(
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(Color.secondary.opacity(0.15))
+            )
+    }
 
     @ViewBuilder
     private func artwork(for url: URL?) -> some View {
