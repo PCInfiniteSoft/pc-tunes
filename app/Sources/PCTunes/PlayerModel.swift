@@ -64,9 +64,10 @@ final class PlayerModel: ObservableObject {
 
     var isConnected: Bool { track != nil }
 
-    /// `nil` renders the icon on its own, with no text beside it.
+    /// `nil` renders the icon on its own, with no text beside it — which is the default,
+    /// until the user turns the title on in Settings.
     var menuBarTitle: String? {
-        guard let track else { return nil }
+        guard Settings.shared.showMenuBarTitle, let track else { return nil }
         return MenuBarTitle.format(
             title: track.title, artist: track.artist,
             limit: Settings.shared.menuBarTitleLength

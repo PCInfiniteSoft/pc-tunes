@@ -17,12 +17,14 @@ struct SettingsView: View {
     var body: some View {
         Form {
             Section("Menu Bar") {
+                Toggle("Show track title beside the icon", isOn: $settings.showMenuBarTitle)
                 Stepper(
                     value: $settings.menuBarTitleLength,
                     in: MenuBarTitle.lengthRange
                 ) {
                     Text("Title length: \(settings.menuBarTitleLength) characters")
                 }
+                .disabled(!settings.showMenuBarTitle)
                 Text(MenuBarTitle.format(
                     title: Self.previewTitle, artist: Self.previewArtist,
                     limit: settings.menuBarTitleLength
@@ -31,6 +33,7 @@ struct SettingsView: View {
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
+                .opacity(settings.showMenuBarTitle ? 1 : 0.4)
             }
 
             Section("Notifications") {

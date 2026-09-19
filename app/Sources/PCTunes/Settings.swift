@@ -5,14 +5,16 @@ import PCTunesCore
 /// instance so the menu bar scene, the settings window and the hotkey registrar all
 /// observe the same values.
 ///
-/// `showNotifications` and `hotkeysEnabled` default to off deliberately: a widget that
-/// starts nagging with notifications or grabbing global keyboard shortcuts on first
-/// launch is one people uninstall.
+/// `showMenuBarTitle`, `showNotifications` and `hotkeysEnabled` default to off
+/// deliberately: a widget that crowds the menu bar with a long track title, starts
+/// nagging with notifications, or grabs global keyboard shortcuts on first launch is one
+/// people uninstall. The menu bar shows the icon alone until the user opts in.
 @MainActor
 final class Settings: ObservableObject {
     static let shared = Settings()
 
     private enum Key {
+        static let showMenuBarTitle = "showMenuBarTitle"
         static let menuBarTitleLength = "menuBarTitleLength"
         static let showNotifications = "showNotifications"
         static let hotkeysEnabled = "hotkeysEnabled"
@@ -20,6 +22,12 @@ final class Settings: ObservableObject {
     }
 
     private let defaults: UserDefaults
+
+    /// Whether the track title is shown beside the menu bar icon at all. Off by default,
+    /// so the menu bar carries just the icon until the user asks for the title.
+    @Published var showMenuBarTitle: Bool {
+        didSet { defaults.set(showMenuBarTitle, forKey: Key.showMenuBarTitle) }
+    }
 
     /// Characters kept in the menu bar title. Always within `MenuBarTitle.lengthRange`,
     /// on both read and write.
@@ -66,6 +74,8 @@ final class Settings: ObservableObject {
 
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
+
+        showMenuBarTitle = defaults.bool(forKey: Key.showMenuBarTitle)
 
         // UserDefaults.integer(forKey:) returns 0 for a key that was never set, which
         // looks like a real (if extreme) value, so presence is checked before reading.
