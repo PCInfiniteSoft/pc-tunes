@@ -153,6 +153,92 @@ func runProtocolTests() {
     expectEqual(seekEncoded["value"] as? Double, 91.5, "seek command value")
     expectNil(seekEncoded["text"], "seek command omits text key entirely")
 
+    // A state message carrying mode, shuffle and repeat decodes all three. The
+    // extension has already mapped the page's NONE/ALL/ONE repeat-mode to off/all/one
+    // (inject.js); the app decodes those raw values directly.
+    let controlsJSON = """
+    {"type":"state","tabId":42,"source":"app","title":"Kalapapruek",
+     "mode":"song","shuffleOn":true,"repeatMode":"all"}
+    """.data(using: .utf8)!
+    guard case .state(_, _, let controls)? = try? MessageDecoder.decode(controlsJSON) else {
+        failures.append("FAIL decode controls state — did not produce a .state message")
+        checkCount += 1
+        return
+    }
+    expectEqual(controls.mode, .song, "state mode song decodes")
+    expectEqual(controls.shuffleOn, true, "state shuffleOn true decodes")
+    expectEqual(controls.repeatMode, .all, "state repeatMode all decodes")
+
+    // The video mode, shuffle off, and each remaining repeat setting decode too, so a
+    // regression in the RepeatMode raw mapping (off/all/one) would be caught.
+    let videoJSON = """
+    {"type":"state","tabId":42,"source":"app","title":"Kalapapruek",
+     "mode":"video","shuffleOn":false,"repeatMode":"one"}
+    """.data(using: .utf8)!
+    guard case .state(_, _, let video)? = try? MessageDecoder.decode(videoJSON) else {
+        failures.append("FAIL decode video state — did not produce a .state message")
+        checkCount += 1
+        return
+    }
+    expectEqual(video.mode, .video, "state mode video decodes")
+    expectEqual(video.shuffleOn, false, "state shuffleOn false decodes")
+    expectEqual(video.repeatMode, .one, "state repeatMode one decodes")
+
+    let repeatOffJSON = """
+    {"type":"state","tabId":42,"source":"app","title":"Kalapapruek","repeatMode":"off"}
+    """.data(using: .utf8)!
+    guard case .state(_, _, let repeatOff)? = try? MessageDecoder.decode(repeatOffJSON) else {
+        failures.append("FAIL decode repeat-off state — did not produce a .state message")
+        checkCount += 1
+        return
+    }
+    expectEqual(repeatOff.repeatMode, .off, "state repeatMode off decodes")
+
+    // A state message with none of the three leaves each nil — absence is meaningful,
+    // matching how liked, volume and position behave.
+    let noControlsJSON = """
+    {"type":"state","tabId":42,"source":"app","title":"Kalapapruek"}
+    """.data(using: .utf8)!
+    guard case .state(_, _, let noControls)? = try? MessageDecoder.decode(noControlsJSON) else {
+        failures.append("FAIL decode no-controls state — did not produce a .state message")
+        checkCount += 1
+        return
+    }
+    expectNil(noControls.mode, "state mode absent stays nil")
+    expectNil(noControls.shuffleOn, "state shuffleOn absent stays nil")
+    expectNil(noControls.repeatMode, "state repeatMode absent stays nil")
+
+    // An invalid mode or repeatMode fails the whole message rather than silently
+    // dropping the field, mirroring the invalid-liked behaviour.
+    let badModeJSON = """
+    {"type":"state","tabId":42,"source":"app","title":"Kalapapruek","mode":"podcast"}
+    """.data(using: .utf8)!
+    expectNil(try? MessageDecoder.decode(badModeJSON), "invalid mode value rejects the message")
+
+    let badRepeatJSON = """
+    {"type":"state","tabId":42,"source":"app","title":"Kalapapruek","repeatMode":"NONE"}
+    """.data(using: .utf8)!
+    expectNil(
+        try? MessageDecoder.decode(badRepeatJSON),
+        "unmapped repeatMode value (NONE) rejects the message"
+    )
+
+    // shuffle encodes its action and tabId, and omits value and text.
+    let shuffleCmd = OutboundCommand(action: .shuffle, tabId: 7)
+    let shuffleEncoded = try! JSONSerialization.jsonObject(with: shuffleCmd.encoded()) as! [String: Any]
+    expectEqual(shuffleEncoded["action"] as? String, "shuffle", "shuffle command action")
+    expectEqual(shuffleEncoded["tabId"] as? Int, 7, "shuffle command tabId")
+    expectNil(shuffleEncoded["value"], "shuffle command omits value key entirely")
+    expectNil(shuffleEncoded["text"], "shuffle command omits text key entirely")
+
+    // cycleRepeat encodes its action and tabId, and omits value and text.
+    let cycleRepeatCmd = OutboundCommand(action: .cycleRepeat, tabId: 9)
+    let cycleRepeatEncoded = try! JSONSerialization.jsonObject(with: cycleRepeatCmd.encoded()) as! [String: Any]
+    expectEqual(cycleRepeatEncoded["action"] as? String, "cycleRepeat", "cycleRepeat command action")
+    expectEqual(cycleRepeatEncoded["tabId"] as? Int, 9, "cycleRepeat command tabId")
+    expectNil(cycleRepeatEncoded["value"], "cycleRepeat command omits value key entirely")
+    expectNil(cycleRepeatEncoded["text"], "cycleRepeat command omits text key entirely")
+
 }
 
 func runArbiterTests() {
