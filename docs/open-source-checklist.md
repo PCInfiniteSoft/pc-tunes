@@ -13,9 +13,13 @@ file as the source of truth from here on.
 - [x] `INSTALL.md` build/install guide with a first-run checklist
 - [x] Internal scaffolding dropped (`docs/superpowers/**` removed; see commit `1c1e423`)
 - [x] No secrets committed; no `.env` in the tree
-- [x] Builds clean and tests pass (`cd app && swift run PCTunesTests` → 97 checks)
+- [x] Builds clean and tests pass (`cd app && swift run PCTunesTests` → 117 checks)
 - [x] Menu bar icon shows on macOS 26.6 (LSUIElement app, bundle id `com.pcinfinity.pc-tunes`)
 - [x] Song/Video mode + cold-start resume merged to `master`
+- [x] README refreshed for Song/Video mode, shuffle/repeat, title/artwork actions and
+      the "Show track title" toggle (commit `27c8e0d`)
+- [x] Protocol tests cover `mode`/`shuffleOn`/`repeatMode` + `shuffle`/`cycleRepeat`
+      (review item #1; commit `c27c352`)
 
 ## Pending
 
@@ -25,11 +29,6 @@ file as the source of truth from here on.
 - [ ] **Set the clone URL owner.** `INSTALL.md` still has
       `git clone https://github.com/<owner>/pc-tunes.git` — replace `<owner>` once the
       repo exists.
-- [ ] **Refresh the README for this session's work.** Not yet documented:
-      - Song/Video mode: the badge under the title, and forcing Song when a counterpart exists.
-      - The title and artwork opening the web app from the dropdown.
-      - The menu bar title is now off by default, with a "Show track title" toggle in Settings
-        (the Features/settings lines still describe only "menu bar title length").
 
 ## Optional / nice to have
 
