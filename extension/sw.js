@@ -359,6 +359,13 @@ function stateMessage(tabId, source, payload) {
   if (state.mode === "song" || state.mode === "video") {
     message.mode = state.mode;
   }
+  // Same reasoning again: a page that could not read shuffle/repeat says nothing.
+  if (typeof state.shuffleOn === "boolean") {
+    message.shuffleOn = state.shuffleOn;
+  }
+  if (state.repeatMode === "off" || state.repeatMode === "all" || state.repeatMode === "one") {
+    message.repeatMode = state.repeatMode;
+  }
   return message;
 }
 
@@ -455,6 +462,32 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   connect();
 });
 
+/// Chrome does not re-inject content scripts into already-open tabs when the extension
+/// is reloaded or updated: the old scripts are orphaned, their `chrome.*` calls go dead,
+/// and an open YouTube Music tab silently stops reporting until it is reloaded by hand.
+/// Re-injecting both scripts fixes it without a manual reload. The page-world `inject.js`
+/// survives the reload and guards against a double copy (`window.__pcTunesInjected`), so
+/// injecting it again is a no-op there; the isolated-world `content.js` bridge is the
+/// part that actually died and gets replaced.
+async function reinjectOpenTabs() {
+  if (!chrome.scripting) return;
+  let tabs;
+  try {
+    tabs = await chrome.tabs.query({ url: "https://music.youtube.com/*" });
+  } catch (error) {
+    return;
+  }
+  for (const tab of tabs) {
+    if (tab.id == null) continue;
+    chrome.scripting
+      .executeScript({ target: { tabId: tab.id }, world: "MAIN", files: ["inject.js"] })
+      .then(() =>
+        chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ["content.js"] })
+      )
+      .catch(() => {});
+  }
+}
+
 chrome.runtime.onStartup.addListener(() => {
   armReconnectAlarm();
   connect();
@@ -462,6 +495,7 @@ chrome.runtime.onStartup.addListener(() => {
 chrome.runtime.onInstalled.addListener(() => {
   armReconnectAlarm();
   connect();
+  reinjectOpenTabs();
 });
 armReconnectAlarm();
 connect();

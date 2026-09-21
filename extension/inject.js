@@ -1,6 +1,13 @@
 (() => {
   "use strict";
 
+  // The service worker re-injects this script into tabs that were open when the
+  // extension reloaded (see sw.js). This page-world script keeps running across that
+  // reload — it uses no `chrome.*` — so a freshly injected second copy must bail,
+  // rather than double every listener, observer and heartbeat.
+  if (window.__pcTunesInjected) return;
+  window.__pcTunesInjected = true;
+
   const HEARTBEAT_MS = 5000;
   const COALESCE_MS = 500;
   const CONFIRM_MS = 1200;
@@ -8,6 +15,11 @@
     playPause: "#play-pause-button",
     next: ".next-button",
     prev: ".previous-button",
+    // Class, not the localized `title` ("Shuffle"/"Repeat off"): the same
+    // language-independence the rating buttons already rely on. One click of the
+    // repeat button cycles NONE -> ALL -> ONE.
+    shuffle: ".shuffle",
+    cycleRepeat: ".repeat",
   };
   const START_TIMEOUT_MS = 15000;
   const START_POLL_MS = 500;
@@ -312,6 +324,17 @@
     if (liked) state.liked = liked;
     const av = readAvToggle();
     if (av) state.mode = av.mode;
+    // Shuffle and repeat live on the player bar as non-localized attributes:
+    // `shuffle-on` is present only while shuffle is on, and `repeat-mode` is
+    // NONE/ALL/ONE. Absent bar means the answer is left off, as with `mode`.
+    const controlBar = playerBar();
+    if (controlBar) {
+      state.shuffleOn = controlBar.hasAttribute("shuffle-on");
+      const repeat = controlBar.getAttribute("repeat-mode");
+      if (repeat === "ALL") state.repeatMode = "all";
+      else if (repeat === "ONE") state.repeatMode = "one";
+      else if (repeat === "NONE") state.repeatMode = "off";
+    }
     return state;
   }
 
@@ -325,7 +348,7 @@
     preferSong(state);
     const key = JSON.stringify([
       state.playing, state.title, state.artist, state.album, state.artwork,
-      state.liked, state.volume, state.mode,
+      state.liked, state.volume, state.mode, state.shuffleOn, state.repeatMode,
     ]);
     if (!force && key === lastKey) return;
     const changed = key !== lastKey;
@@ -556,7 +579,7 @@
         childList: true,
         characterData: true,
         attributes: true,
-        attributeFilter: ["like-status"],
+        attributeFilter: ["like-status", "shuffle-on", "repeat-mode"],
       });
       boundBar = bar;
     }
