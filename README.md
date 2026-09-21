@@ -85,6 +85,16 @@ progress bar, settings, hotkeys and browser-fallback work (In-menu search is
 described there too, but was dropped before release — see below), and
 `docs/design/2026-09-15-song-video-mode.md` for the Song/Video mode work.
 
+## How to use
+
+The whole app lives in the menu bar icon: click it for the now-playing dropdown. The
+artwork and title open the web app; the row of controls handles shuffle, previous,
+play/pause, next and repeat, with like/dislike and a volume slider alongside. Global
+hotkeys are available but off by default — turn them on in Settings.
+
+See **[USAGE.md](USAGE.md)** for the full guide — every control, Song vs Video, cold
+start, hotkeys and settings. ภาษาไทย: **[USAGE.th.md](USAGE.th.md)**.
+
 ## Status and known limitations
 
 This is a working hobby project, built and used daily by its author, not a polished
