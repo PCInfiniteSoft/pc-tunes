@@ -1,0 +1,56 @@
+name: Bug report
+description: A control doesn't work, the app misbehaves, or something crashes.
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. If a single control silently stopped working, first check
+        whether a **notice** appeared at the top of the dropdown — that usually means a
+        YouTube Music selector changed, a known and expected failure mode.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what actually happened.
+      placeholder: |
+        1. Pressed …
+        2. Expected …
+        3. Instead …
+    validations:
+      required: true
+  - type: input
+    id: notice
+    attributes:
+      label: Notice in the dropdown?
+      description: Did a notice appear at the top of the dropdown? If so, paste its text.
+      placeholder: e.g. "Next and previous are unavailable" — or "none"
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version
+      placeholder: e.g. 14.5, 15.0, 26.6
+    validations:
+      required: true
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and version
+      placeholder: e.g. Chrome 128, Brave 1.68, Edge 128
+    validations:
+      required: true
+  - type: dropdown
+    id: extension-load
+    attributes:
+      label: How is the extension loaded?
+      options:
+        - Unpacked (Load unpacked in Developer mode)
+        - Other (explain above)
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Console / logs (optional)
+      description: Anything from the browser extension's console or the app, if relevant.
+      render: text

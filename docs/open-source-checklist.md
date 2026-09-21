@@ -36,7 +36,8 @@ _All release-blocking items done. The push to GitHub is complete._
 
 - [x] Add `.env*` to `.gitignore` for hygiene (done; commit `60ae1a2`).
 - [x] `CONTRIBUTING.md` added (layout, build/test/extension checks, code & commit
-      conventions), linked from the README. `CODE_OF_CONDUCT.md` / issue & PR templates
-      still optional for a hobby project.
+      conventions), linked from the README.
+- [x] `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1) + `.github` issue forms
+      (bug/feature) and a PR template.
 - [x] CI (build + `PCTunesTests` + extension checks) on push/PR via GitHub Actions
       (`.github/workflows/ci.yml`), with a status badge in the README.
