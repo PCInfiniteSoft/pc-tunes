@@ -30,7 +30,9 @@ struct MenuContent: View {
             Divider()
 
             volume
-            upNext
+            // "Up next" is hidden for now — it advances with the track and felt
+            // unfinished. The `upNext` view and the queue plumbing stay in place so it
+            // can be switched back on.
             noticeBanner
 
             Divider()
@@ -165,7 +167,10 @@ struct MenuContent: View {
     }
 
     private var transport: some View {
-        HStack(spacing: 20) {
+        HStack(spacing: 14) {
+            controlButton("shuffle", action: model.shuffle)
+                .foregroundStyle(shuffleActive ? Color.accentColor : Color.primary)
+                .disabled(!model.isConnected)
             controlButton("backward.fill", action: model.previous)
                 .disabled(!model.isConnected)
             controlButton(
@@ -175,8 +180,24 @@ struct MenuContent: View {
             .disabled(!model.extensionConnected)
             controlButton("forward.fill", action: model.next)
                 .disabled(!model.isConnected)
+            controlButton(repeatSymbol, action: model.cycleRepeat)
+                .foregroundStyle(repeatActive ? Color.accentColor : Color.primary)
+                .disabled(!model.isConnected)
         }
         .frame(maxWidth: .infinity)
+    }
+
+    /// Shuffle and repeat light up when on. `nil` state (the page did not say) reads as
+    /// off — unlit — rather than guessing.
+    private var shuffleActive: Bool { model.track?.shuffleOn == true }
+    private var repeatActive: Bool {
+        let mode = model.track?.repeatMode
+        return mode == .all || mode == .one
+    }
+    /// `repeat.1` only for repeat-one; plain `repeat` for both off and repeat-all, with
+    /// the accent tint telling all apart from off.
+    private var repeatSymbol: String {
+        model.track?.repeatMode == .one ? "repeat.1" : "repeat"
     }
 
     /// `liked == nil` means unknown, not neutral — both thumbs stay unlit rather than
@@ -282,13 +303,6 @@ struct MenuContent: View {
     private var footer: some View {
         Button(model.isConnected ? "Go to YouTube Music" : "Open YouTube Music") {
             model.openYouTubeMusic()
-        }
-        Toggle("Launch at login", isOn: $model.launchAtLogin)
-        if model.loginItemNeedsApproval {
-            Text("Waiting for approval in System Settings → General → Login Items.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
         }
         Button("Settings…", action: openSettings)
         Button("Quit PC Tunes") { NSApplication.shared.terminate(nil) }

@@ -23,6 +23,14 @@ public enum PlaybackMode: String, Codable, Equatable, Sendable {
     case video
 }
 
+/// The queue's repeat setting, as YouTube Music's player bar reports it in its
+/// non-localized `repeat-mode` attribute (`NONE`/`ALL`/`ONE`).
+public enum RepeatMode: String, Codable, Equatable, Sendable {
+    case off
+    case all
+    case one
+}
+
 /// A snapshot of what YouTube Music is playing.
 public struct TrackState: Equatable, Sendable {
     public var playing: Bool
@@ -39,11 +47,16 @@ public struct TrackState: Equatable, Sendable {
     public var volume: Double?
     /// Song or video, or `nil` when the page did not say.
     public var mode: PlaybackMode?
+    /// Whether shuffle is on, or `nil` when the page did not say.
+    public var shuffleOn: Bool?
+    /// The repeat setting, or `nil` when the page did not say.
+    public var repeatMode: RepeatMode?
 
     public init(
         playing: Bool, title: String, artist: String, album: String,
         artwork: URL?, position: Double? = nil, duration: Double,
-        liked: LikeState? = nil, volume: Double? = nil, mode: PlaybackMode? = nil
+        liked: LikeState? = nil, volume: Double? = nil, mode: PlaybackMode? = nil,
+        shuffleOn: Bool? = nil, repeatMode: RepeatMode? = nil
     ) {
         self.playing = playing
         self.title = title
@@ -55,6 +68,8 @@ public struct TrackState: Equatable, Sendable {
         self.liked = liked
         self.volume = volume
         self.mode = mode
+        self.shuffleOn = shuffleOn
+        self.repeatMode = repeatMode
     }
 }
 
@@ -102,6 +117,8 @@ public enum MessageDecoder {
         let liked: LikeState?
         let volume: Double?
         let mode: PlaybackMode?
+        let shuffleOn: Bool?
+        let repeatMode: RepeatMode?
         let text: String?
         let items: [QueueItem]?
     }
@@ -125,7 +142,9 @@ public enum MessageDecoder {
                 duration: raw.duration ?? 0,
                 liked: raw.liked,
                 volume: raw.volume,
-                mode: raw.mode
+                mode: raw.mode,
+                shuffleOn: raw.shuffleOn,
+                repeatMode: raw.repeatMode
             )
             return .state(tabId: tabId, source: source, track: track)
         case "gone":
@@ -157,6 +176,8 @@ public struct OutboundCommand: Encodable, Equatable, Sendable {
         case seek
         case volume
         case requestQueue
+        case shuffle
+        case cycleRepeat
     }
 
     public let type = "cmd"

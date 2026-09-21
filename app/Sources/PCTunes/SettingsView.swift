@@ -5,6 +5,7 @@ import SwiftUI
 /// binds straight to `Settings.shared`, so there is no separate view state to keep in
 /// sync with it.
 struct SettingsView: View {
+    @ObservedObject var model: PlayerModel
     @ObservedObject private var settings = Settings.shared
     @ObservedObject private var hotkeys = Hotkeys.shared
 
@@ -16,6 +17,16 @@ struct SettingsView: View {
 
     var body: some View {
         Form {
+            Section("General") {
+                Toggle("Launch at login", isOn: $model.launchAtLogin)
+                if model.loginItemNeedsApproval {
+                    Text("Waiting for approval in System Settings → General → Login Items.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
             Section("Menu Bar") {
                 Toggle("Show track title beside the icon", isOn: $settings.showMenuBarTitle)
                 Stepper(

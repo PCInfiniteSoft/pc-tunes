@@ -144,6 +144,8 @@ final class PlayerModel: ObservableObject {
     func previous() { send(.prev) }
     func like() { send(.like) }
     func dislike() { send(.dislike) }
+    func shuffle() { send(.shuffle) }
+    func cycleRepeat() { send(.cycleRepeat) }
 
     /// Moves playback to `seconds` and moves the local anchor immediately, so the bar
     /// responds without waiting for the round trip to the extension and back.

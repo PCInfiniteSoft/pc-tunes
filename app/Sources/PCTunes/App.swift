@@ -90,7 +90,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// inside a SwiftUI `App`.
     private func showSettings() {
         if settingsWindow == nil {
-            let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView()))
+            let window = NSWindow(contentViewController: NSHostingController(rootView: SettingsView(model: model)))
             window.title = "PC Tunes Settings"
             window.styleMask = [.titled, .closable]
             window.isReleasedWhenClosed = false
