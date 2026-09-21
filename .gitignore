@@ -2,3 +2,7 @@
 .build/
 *.app/
 .superpowers/
+
+# Local env files (none today; hygiene guard for the future)
+.env*
+!.env.example
