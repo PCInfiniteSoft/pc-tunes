@@ -1,8 +1,8 @@
 # PC Tunes
 
 A macOS menu bar widget for YouTube Music. Shows the current track with artwork and
-gives you play/pause, next/previous, like/dislike, seeking, volume and an
-up-next list without switching away from whatever app you're in.
+gives you play/pause, next/previous, like/dislike, seeking, volume, shuffle and
+repeat without switching away from whatever app you're in.
 
 It needs a Chromium-based browser — Google Chrome is the one this has actually been
 tested against. See [Known limitations](#status-and-known-limitations) for what that
@@ -51,17 +51,22 @@ See [INSTALL.md](INSTALL.md) for step-by-step setup (English), or
 
 ## Features
 
-- Now-playing display with title, artist, album and artwork
+- Now-playing display with title, artist, album and artwork; the title and artwork
+  are buttons that open the YouTube Music web app
 - Play/pause, next, previous
+- Shuffle and repeat, mirroring the player bar's own state (the buttons light up when
+  on, and repeat shows a distinct icon for repeat-one)
 - Like / dislike, reflecting the page's own rating state
 - A progress bar that can be dragged to seek
 - Volume control
-- An up-next list, fetched on demand when you expand it
+- Song / Video mode: a badge under the title shows which form is playing, and when a
+  track exists as both, PC Tunes asks the page for the song
 - Cold-start playback: press play with nothing open and PC Tunes launches YouTube
   Music behind whatever you are looking at, starts playing, and minimises the window
   to the Dock once the music is actually running
 - Launch at login
-- A settings window (menu bar title length, notifications, hotkeys)
+- A settings window: the menu bar title (a "Show track title" toggle, off by default,
+  and its length), notifications, and hotkeys
 - Optional notifications when the track changes
 - Optional global hotkeys, rebindable in Settings (⌃⌥Space play/pause, ⌃⌥→ next,
   ⌃⌥← previous out of the box) — registered with Carbon's `RegisterEventHotKey`, which
@@ -70,8 +75,9 @@ See [INSTALL.md](INSTALL.md) for step-by-step setup (English), or
   page selector no longer matches
 
 See `docs/design/2026-09-04-feature-expansion.md` for the design notes behind the
-progress bar, settings, hotkeys and browser-fallback work. (In-menu search is
-described there too, but was dropped before release — see below.)
+progress bar, settings, hotkeys and browser-fallback work (In-menu search is
+described there too, but was dropped before release — see below), and
+`docs/design/2026-09-15-song-video-mode.md` for the Song/Video mode work.
 
 ## Status and known limitations
 
