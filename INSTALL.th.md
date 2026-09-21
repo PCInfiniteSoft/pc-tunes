@@ -24,7 +24,7 @@
 ## 1. Clone repository
 
 ```bash
-git clone https://github.com/<owner>/pc-tunes.git
+git clone https://github.com/PCInfiniteSoft/pc-tunes.git
 cd pc-tunes
 ```
 

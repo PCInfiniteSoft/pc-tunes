@@ -25,7 +25,7 @@ actually see on screen.
 ## 1. Clone the repository
 
 ```bash
-git clone https://github.com/<owner>/pc-tunes.git
+git clone https://github.com/PCInfiniteSoft/pc-tunes.git
 cd pc-tunes
 ```
 
