@@ -20,19 +20,21 @@ file as the source of truth from here on.
       the "Show track title" toggle (commit `27c8e0d`)
 - [x] Protocol tests cover `mode`/`shuffleOn`/`repeatMode` + `shuffle`/`cycleRepeat`
       (review item #1; commit `c27c352`)
+- [x] Carbon hotkey handler now uninstalled when unused (review item #7; commit `ae705d1`)
+- [x] `.env*` ignored in `.gitignore` (review item #4; commit `60ae1a2`)
+- [x] **GitHub repo created and pushed** — public at
+      https://github.com/PCInfiniteSoft/pc-tunes (owner `PCInfiniteSoft`, default
+      branch `master`), with description + topics for discoverability
+- [x] Clone URL owner set to `PCInfiniteSoft` in `INSTALL.md` / `INSTALL.th.md`
+      (commit `b732fef`)
 
 ## Pending
 
-- [ ] **Create the GitHub repo and push.** No remote exists yet. Decide owner
-      (`PCInfiniteSoft`?) and public vs private. Repo name `pc-tunes` (matches the
-      clone URL already in `INSTALL.md`).
-- [ ] **Set the clone URL owner.** `INSTALL.md` still has
-      `git clone https://github.com/<owner>/pc-tunes.git` — replace `<owner>` once the
-      repo exists.
+_All release-blocking items done. The push to GitHub is complete._
 
 ## Optional / nice to have
 
-- [ ] Add `.env*` to `.gitignore` for hygiene (the app has no `.env` today, so low priority).
+- [x] Add `.env*` to `.gitignore` for hygiene (done; commit `60ae1a2`).
 - [ ] `CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` / `.github` issue & PR templates — the
       README already has a Contributing section, so these are optional for a hobby project.
 - [ ] CI (build + `PCTunesTests`) once the repo is on GitHub.
