@@ -31,6 +31,19 @@ final class Hotkeys: ObservableObject {
 
     private init() {}
 
+    deinit {
+        // The singleton lives for the whole process, so this rarely runs — but it keeps
+        // the Carbon registrations balanced rather than relying on process teardown to
+        // reclaim them. deinit is not MainActor-isolated; these are plain C calls that
+        // touch only the two refs, so no isolated state is read.
+        if let handler = eventHandlerRef {
+            RemoveEventHandler(handler)
+        }
+        for (_, ref) in hotKeyRefs {
+            UnregisterEventHotKey(ref)
+        }
+    }
+
     /// Starts watching the hotkey settings. `@Published`'s publisher hands a new
     /// subscriber the current value immediately, so this registers right away when
     /// hotkeys are already on, and again on every later change — one code path for
@@ -51,6 +64,9 @@ final class Hotkeys: ObservableObject {
         // actions, where releasing the old one has to happen before claiming the new.
         unregisterAll()
         guard enabled else {
+            // Turning hotkeys off takes the handler down with the registrations, so
+            // nothing Carbon-side lingers while the feature is disabled.
+            removeHandler()
             unavailable = []
             return
         }
@@ -86,6 +102,12 @@ final class Hotkeys: ObservableObject {
             UnregisterEventHotKey(ref)
         }
         hotKeyRefs.removeAll()
+    }
+
+    private func removeHandler() {
+        guard let handler = eventHandlerRef else { return }
+        RemoveEventHandler(handler)
+        eventHandlerRef = nil
     }
 
     private func installHandlerIfNeeded() {
