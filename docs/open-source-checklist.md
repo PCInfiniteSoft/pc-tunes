@@ -35,6 +35,8 @@ _All release-blocking items done. The push to GitHub is complete._
 ## Optional / nice to have
 
 - [x] Add `.env*` to `.gitignore` for hygiene (done; commit `60ae1a2`).
-- [ ] `CONTRIBUTING.md` / `CODE_OF_CONDUCT.md` / `.github` issue & PR templates — the
-      README already has a Contributing section, so these are optional for a hobby project.
-- [ ] CI (build + `PCTunesTests`) once the repo is on GitHub.
+- [x] `CONTRIBUTING.md` added (layout, build/test/extension checks, code & commit
+      conventions), linked from the README. `CODE_OF_CONDUCT.md` / issue & PR templates
+      still optional for a hobby project.
+- [x] CI (build + `PCTunesTests` + extension checks) on push/PR via GitHub Actions
+      (`.github/workflows/ci.yml`), with a status badge in the README.

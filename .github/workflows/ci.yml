@@ -1,0 +1,37 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-and-test:
+    name: Build & test (macOS)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Build
+        working-directory: app
+        run: swift build
+
+      - name: Run tests
+        working-directory: app
+        run: swift run PCTunesTests
+
+      - name: Check the browser extension
+        working-directory: extension
+        run: |
+          for file in *.js; do
+            node --check "$file"
+          done
+          node check.mjs inject.js content.js sw.js

@@ -1,5 +1,7 @@
 # PC Tunes
 
+[![CI](https://github.com/PCInfiniteSoft/pc-tunes/actions/workflows/ci.yml/badge.svg)](https://github.com/PCInfiniteSoft/pc-tunes/actions/workflows/ci.yml)
+
 A macOS menu bar widget for YouTube Music. Shows the current track with artwork and
 gives you play/pause, next/previous, like/dislike, seeking, volume, shuffle and
 repeat without switching away from whatever app you're in.
@@ -211,6 +213,9 @@ swift-testing. Run it with:
 ```bash
 cd app && swift run PCTunesTests
 ```
+
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for the full workflow — project layout,
+build/test/extension checks, code expectations and the commit/PR conventions.
 
 ## Licence
 
