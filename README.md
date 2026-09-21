@@ -8,6 +8,12 @@ It needs a Chromium-based browser — Google Chrome is the one this has actually
 tested against. See [Known limitations](#status-and-known-limitations) for what that
 means for Brave, Edge and Safari.
 
+## Screenshots
+
+| Menu bar dropdown | Settings |
+| --- | --- |
+| <img src="docs/images/menu-bar.png" alt="PC Tunes menu bar dropdown showing the current track with artwork, a Song badge, a progress bar, shuffle/repeat and volume controls" width="380"> | <img src="docs/images/settings.png" alt="PC Tunes settings window with Launch at login, menu bar title, notifications and hotkey options" width="380"> |
+
 ## Why it exists
 
 Starting with macOS 15.4, Apple blocks third-party apps from reading "now playing"
